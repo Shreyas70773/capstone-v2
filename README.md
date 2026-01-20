@@ -1,257 +1,344 @@
 # Brand-Aligned Content Generation Platform
-## AI-Powered Multi-Agent System with GraphRAG & Reasoning-Augmented Image Generation
+## Graph-Augmented AI Content System (Capstone Project)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Architecture](https://img.shields.io/badge/Architecture-Microservices-blue.svg)](docs/architecture/01-system-overview.md)
-[![Status](https://img.shields.io/badge/Status-Design%20Phase-orange.svg)](docs/architecture/06-implementation-roadmap.md)
+[![Architecture](https://img.shields.io/badge/Architecture-GraphRAG-blue.svg)](docs/architecture/00-capstone-scope.md)
+[![Status](https://img.shields.io/badge/Status-In%20Development-green.svg)](docs/architecture/07-capstone-implementation.md)
+[![Budget](https://img.shields.io/badge/Budget-$42/month-brightgreen.svg)](docs/architecture/00-capstone-scope.md#cost-breakdown)
 
 ---
 
-## 🎯 Project Overview
+## 🎓 Project Overview
 
-A **production-grade, graph-augmented content generation platform** that combines GraphRAG, reasoning-driven image generation, and multi-agent orchestration to create brand-aligned marketing content at scale.
+A **college capstone project** demonstrating a graph-augmented content generation system that combines modern AI techniques with knowledge graph technology to create brand-consistent marketing content. This implementation is optimized for academic demonstration and learning (5-10 users, ~$50/month budget).
 
-This system enables enterprises to generate consistent, on-brand visual and textual content while maintaining strict brand guidelines, leveraging continuous learning from user feedback.
+While based on production-grade architecture patterns, this project focuses on demonstrating core concepts: **GraphRAG**, **multi-agent systems**, **prompt engineering**, and **feedback learning**.
 
-### Key Capabilities
+### Key Learning Objectives
 
-- 🎨 **Brand-Consistent Image Generation** - Fine-tuned SDXL with LoRA adapters per brand
-- 🧠 **GraphRAG Knowledge System** - Neo4j-powered brand intelligence with semantic search
-- 🤖 **Multi-Agent Orchestration** - 8 specialized agents coordinated via MCP + A2A protocols
-- 🔄 **Continuous Learning** - Feedback-driven graph updates and model refinement
-- 📊 **Enterprise-Grade** - Multi-tenant, auto-scaling, 99.5% SLA
+- 🧠 **GraphRAG Knowledge Base** - Neo4j for brand context retrieval
+- 🤖 **Multi-Agent Coordination** - Async Python agents working together
+- 🎨 **AI Content Generation** - Image (SDXL) + text (GPT-4o-mini) via APIs
+- ✅ **Brand Validation** - Automated consistency scoring
+- 🔄 **Feedback Learning** - Graph updates from user input
+- 🌐 **Full-Stack Development** - React frontend + FastAPI backend
 
 ---
 
-## 🏗️ System Architecture
+## 📚 Documentation Structure
+
+### 🎯 Start Here (Capstone-Focused)
+
+| Document | Description | Priority |
+|----------|-------------|----------|
+| **[00-capstone-scope.md](docs/architecture/00-capstone-scope.md)** | **Simplified architecture for students** - Cost breakdown, comparisons, demo script | ⭐ **READ FIRST** |
+| **[07-capstone-implementation.md](docs/architecture/07-capstone-implementation.md)** | **8-week implementation plan** - Tasks, timeline, technology stack | ⭐ **IMPLEMENTATION** |
+
+### 📖 Production Reference (For Learning)
+
+These show the full production-scale design for educational context:
+
+| Document | Description |
+|----------|-------------|
+| [01-system-overview.md](docs/architecture/01-system-overview.md) | Production architecture patterns and technology decisions |
+| [02-graphrag-design.md](docs/architecture/02-graphrag-design.md) | Neo4j schema design and query patterns |
+| [03-image-generation-pipeline.md](docs/architecture/03-image-generation-pipeline.md) | Reasoning-augmented generation concept |
+| [04-agent-orchestration.md](docs/architecture/04-agent-orchestration.md) | Multi-agent architecture and protocols |
+| [05-monitoring-framework.md](docs/architecture/05-monitoring-framework.md) | Observability and SLO best practices |
+| [06-implementation-roadmap.md](docs/architecture/06-implementation-roadmap.md) | 37-week enterprise rollout strategy |
+
+---
+
+## 🏗️ Simplified Architecture (Capstone)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    PLATFORM ARCHITECTURE                                     │
+│                    CAPSTONE ARCHITECTURE                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌──────────────────┐                                                        │
-│  │   Web Dashboard  │                                                        │
-│  │   (Next.js)      │                                                        │
-│  └────────┬─────────┘                                                        │
-│           │                                                                  │
-│           ▼                                                                  │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                    API GATEWAY (Kong)                                 │   │
-│  │         Authentication • Rate Limiting • Multi-Tenancy               │   │
-│  └──────────────────────┬───────────────────────────────────────────────┘   │
-│                         │                                                    │
-│                         ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │              TEMPORAL.IO WORKFLOW ENGINE                              │   │
-│  │                   Saga Orchestration • Retries                        │   │
-│  └──────────────────────┬───────────────────────────────────────────────┘   │
-│                         │                                                    │
-│        ┌────────────────┼────────────────┐                                  │
-│        │                │                │                                  │
-│        ▼                ▼                ▼                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                         │
-│  │   Brand     │  │   Graph     │  │  Reasoning  │                         │
-│  │ Intelligence│  │    Query    │  │    Agent    │                         │
-│  │   Agent     │  │   Agent     │  │             │                         │
-│  └─────────────┘  └─────────────┘  └─────────────┘                         │
+│                         ┌─────────────────┐                                 │
+│                         │   Web App       │                                 │
+│                         │   (React SPA)   │                                 │
+│                         └────────┬────────┘                                 │
+│                                  │                                          │
+│                                  ▼                                          │
+│                         ┌─────────────────┐                                 │
+│                         │   FastAPI       │                                 │
+│                         │   Backend       │                                 │
+│                         └────────┬────────┘                                 │
+│                                  │                                          │
+│       ┌──────────────────────────┼──────────────────────────┐              │
+│       │                          │                          │              │
+│       ▼                          ▼                          ▼              │
+│  ┌─────────┐          ┌─────────────────┐         ┌─────────────┐         │
+│  │  Brand  │          │  Orchestrator   │         │ Validation  │         │
+│  │  Agent  │          │     Agent       │         │   Agent     │         │
+│  │ (Python)│          │   (AsyncIO)     │         │  (Python)   │         │
+│  └────┬────┘          └────────┬────────┘         └──────┬──────┘         │
+│       │                        │                         │                │
+│       │              ┌─────────┴─────────┐               │                │
+│       │              │                   │               │                │
+│       │              ▼                   ▼               │                │
+│       │      ┌──────────────┐    ┌──────────────┐        │                │
+│       │      │   Image Gen  │    │   Text Gen   │        │                │
+│       │      │   (Replicate)│    │  (OpenAI API)│        │                │
+│       │      └──────────────┘    └──────────────┘        │                │
+│       │                                                   │                │
+│       └───────────────────────┬───────────────────────────┘                │
+│                               │                                            │
+│                               ▼                                            │
+│                      ┌─────────────────┐                                   │
+│                      │     Neo4j       │                                   │
+│                      │   (Community)   │                                   │
+│                      │  + Vector Index │                                   │
+│                      └─────────────────┘                                   │
 │                                                                              │
-│        ┌────────────────┴────────────────┐                                  │
-│        │                                 │                                  │
-│        ▼                                 ▼                                  │
-│  ┌─────────────┐                   ┌─────────────┐                         │
-│  │   Image     │                   │    Text     │                         │
-│  │ Generation  │                   │ Generation  │                         │
-│  │   Agent     │                   │   Agent     │                         │
-│  │ (SDXL+LoRA) │                   │  (GPT-4)    │                         │
-│  └─────────────┘                   └─────────────┘                         │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                         DATA LAYER                                    │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────┐  │   │
-│  │  │  Neo4j   │  │ pgvector │  │  Redis   │  │  Kafka   │  │  S3  │  │   │
-│  │  │  (Graph) │  │(Embeddings│ │ (Cache)  │  │ (Events) │  │Assets│  │   │
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────┘  │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
+│  Deployment:  Single DigitalOcean Droplet ($24/month)                      │
+│               Docker Compose • 5-10 users • $42/month total                │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📚 Documentation
+## 🚀 Quick Start (Coming Soon)
 
-### Architecture Documents
+### Prerequisites
+```bash
+- Python 3.11+
+- Node.js 18+
+- Docker Desktop
+- OpenAI API key
+- Replicate API key
+```
 
-| Document | Description |
-|----------|-------------|
-| **[01-system-overview.md](docs/architecture/01-system-overview.md)** | High-level architecture, technology stack, and design decisions |
-| **[02-graphrag-design.md](docs/architecture/02-graphrag-design.md)** | Neo4j knowledge graph schema, query patterns, and hybrid search |
-| **[03-image-generation-pipeline.md](docs/architecture/03-image-generation-pipeline.md)** | Reasoning-augmented SDXL pipeline with LoRA fine-tuning |
-| **[04-agent-orchestration.md](docs/architecture/04-agent-orchestration.md)** | Multi-agent coordination using MCP + A2A protocols |
-| **[05-monitoring-framework.md](docs/architecture/05-monitoring-framework.md)** | Observability, metrics, alerts, and SLO definitions |
-| **[06-implementation-roadmap.md](docs/architecture/06-implementation-roadmap.md)** | Phased delivery plan (MVP → Beta → GA) |
+### Setup
 
----
+```bash
+# 1. Clone repository
+git clone https://github.com/Shreyas70773/system-design-graph-rag-reasoning-image-resource-management-software.git
+cd system-design-capstone
 
-## 🚀 Key Features
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys
 
-### 1. GraphRAG-Powered Brand Intelligence
+# 3. Start services with Docker Compose
+docker-compose up -d
 
-- **Knowledge Graph**: Neo4j stores brand guidelines, assets, preferences, and relationships
-- **Hybrid Search**: Combines graph traversal with pgvector semantic search
-- **Contextual Retrieval**: Multi-hop queries discover complex brand requirements
-- **Continuous Learning**: Feedback loop updates graph with user preferences
+# 4. Initialize database with demo brands
+docker exec -it neo4j bash
+# Run schema and seed scripts
 
-### 2. Reasoning-Augmented Image Generation
-
-- **Base Model**: SDXL 1.0 fine-tuned for brand consistency
-- **Reasoning Transformer**: 1.3B parameter model generates "thought images" before generation
-- **Layout Planning**: Predicts spatial composition and binding tokens
-- **LoRA Adapters**: Per-brand fine-tuning (~40MB each) for visual consistency
-- **Validation Pipeline**: Automated brand compliance checking
-
-### 3. Multi-Agent Orchestration
-
-**8 Specialized Agents:**
-- **Brand Intelligence Agent** - Analyzes brand context and requirements
-- **Content Strategy Agent** - Orchestrates generation workflow
-- **Graph Query Agent** - Retrieves brand knowledge
-- **Reasoning Agent** - Plans image composition
-- **Image Generation Agent** - Executes SDXL inference
-- **Text Generation Agent** - Creates copy aligned to brand voice
-- **Validation Agent** - Ensures brand compliance
-- **Feedback Learning Agent** - Processes user feedback
-
-**Communication:**
-- **MCP Protocol**: Tool invocation and function calling
-- **A2A Protocol**: Agent-to-agent messaging over Kafka
-- **Temporal.io**: Durable workflow orchestration with saga patterns
-
-### 4. Production-Grade Infrastructure
-
-- **Auto-Scaling**: GPU and CPU nodes scale based on queue depth
-- **Multi-Tenancy**: Isolated data per tenant, shared compute
-- **High Availability**: 99.5% SLA with circuit breakers and retries
-- **Observability**: Prometheus metrics, Jaeger traces, Loki logs
-- **Security**: SOC 2 Type II, encryption at rest/transit, RBAC
+# 5. Access application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000/docs
+# Neo4j Browser: http://localhost:7474
+```
 
 ---
 
-## 🎯 Target Performance
+## 💡 Key Features (Capstone Scope)
 
-| Metric | Target | Measured At |
-|--------|--------|-------------|
-| **Generation Latency** | < 30s (P95) | End-to-end |
-| **Availability** | 99.5% | Monthly SLA |
-| **Brand Consistency Score** | > 0.90 | Per generation |
-| **Success Rate** | > 99% | Generation completion |
-| **Cost per Generation** | < $0.50 | Fully loaded cost |
-| **Concurrent Users** | 1,000+ | Peak capacity |
-| **Daily Generations** | 10,000+ | Production scale |
+### 1. GraphRAG Knowledge Base
+- **Neo4j Community** for brand knowledge representation
+- 5 demo brands (Nike, Apple, Coca-Cola, IBM, Starbucks)
+- Relationship-based context retrieval
+- Vector search for semantic similarity
 
----
+### 2. AI Content Generation
+- **Image Generation**: SDXL via Replicate API
+- **Text Generation**: GPT-4o-mini for cost efficiency
+- **Brand Consistency**: Prompt engineering with brand context
+- **Validation**: Color palette and logo detection
 
-## 🛠️ Technology Stack
+### 3. Multi-Agent Coordination
+- **Brand Intelligence Agent**: Retrieves brand context from graph
+- **Orchestrator Agent**: Coordinates generation workflow
+- **Image Generation Agent**: Creates visual content
+- **Text Generation Agent**: Writes marketing copy
+- **Validation Agent**: Ensures brand compliance
 
-### Core Infrastructure
-- **Orchestration**: AWS EKS (Kubernetes)
-- **Workflow Engine**: Temporal.io
-- **Message Queue**: Apache Kafka (MSK)
-- **API Gateway**: Kong
-
-### Data Layer
-- **Graph Database**: Neo4j Enterprise (3-node cluster)
-- **Vector Database**: PostgreSQL 15 + pgvector
-- **Cache**: Redis Cluster
-- **Analytics**: ClickHouse
-- **Storage**: Amazon S3 + CloudFront CDN
-
-### AI/ML Stack
-- **LLM**: OpenAI GPT-4 Turbo (primary), Anthropic Claude 3 (fallback)
-- **Image Model**: SDXL 1.0 + Custom Reasoning Head (3.4B params)
-- **Inference**: NVIDIA Triton Inference Server
-- **Training**: AWS SageMaker
-- **GPU**: NVIDIA A100 (p4d.24xlarge instances)
-
-### Observability
-- **Metrics**: Prometheus + Grafana
-- **Tracing**: Jaeger
-- **Logging**: Loki + Vector
-- **Alerting**: Alertmanager + PagerDuty
-
-### Development
-- **IaC**: Terraform
-- **CI/CD**: GitHub Actions
-- **Language**: TypeScript (services), Python (ML)
-- **Frontend**: Next.js + React
+### 4. Feedback Learning
+- User feedback (👍 👎) updates knowledge graph
+- Strengthens preferences or adds prohibitions
+- Continuous improvement over time
 
 ---
 
-## 📈 Implementation Roadmap
+## 🎯 Demo Flow (5-Minute Presentation)
 
-### Phase 1: Foundation (MVP) - Jan 15 - Mar 31, 2026
-**Goal**: Prove end-to-end generation with 3 pilot brands
+Perfect for capstone presentation:
 
-- ✅ Core infrastructure (EKS, Neo4j, PostgreSQL)
-- ✅ Basic GraphRAG integration
-- ✅ SDXL image generation
-- ✅ Simple validation pipeline
-- ✅ Internal testing dashboard
-
-**Exit Criteria**: Generate content < 60s, brand score > 0.85, 95% success rate
-
-### Phase 2: Enhanced Capabilities (Beta) - Mar 1 - May 31, 2026
-**Goal**: Multi-agent orchestration with 10 beta customers
-
-- 🔄 Temporal.io workflow engine
-- 🔄 MCP + A2A agent communication
-- 🔄 Reasoning Transformer integration
-- 🔄 Feedback learning loop
-- 🔄 LoRA fine-tuning pipeline
-
-**Exit Criteria**: 10 active customers, brand score > 0.90, NPS > 40
-
-### Phase 3: Production Scale (GA) - May 15 - Aug 15, 2026
-**Goal**: Enterprise-ready with 50+ brands
-
-- ⏳ Auto-scaling infrastructure
-- ⏳ Multi-tenant isolation
-- ⏳ Enterprise SSO and RBAC
-- ⏳ SOC 2 Type II certification
-- ⏳ 99.5% SLA enforcement
-
-**Exit Criteria**: 50+ brands, 10K generations/day, cost < $0.50/gen
+1. **Select Brand** → Choose "Nike" from dropdown
+2. **Enter Brief** → "Create a social media ad for running shoes, summer vibes"
+3. **Generate** → Watch agents work in real-time
+4. **View Results** → Image + headline + body copy displayed
+5. **See Score** → Brand consistency: 0.92/1.0 ✅
+6. **Give Feedback** → Thumbs up to improve system
+7. **Show Graph** → Open Neo4j Browser to visualize updated relationships
 
 ---
 
-## 💡 Novel Contributions
+## 💰 Cost Breakdown
 
-### 1. GraphRAG for Brand Intelligence
-Unlike traditional RAG, this system uses a **knowledge graph** to:
-- Model complex brand relationships (REQUIRES, PROHIBITS, PREFERS)
-- Perform multi-hop reasoning across brand guidelines
-- Enable temporal queries (seasonal preferences)
-- Support continuous learning via graph mutations
+```
+Monthly Costs:
+────────────────────────────────────────
+Infrastructure:
+  • DigitalOcean Droplet (8GB)      $24
+  • Domain + SSL (Cloudflare)       $10
+  • Cloudflare R2 Storage           $5
+                                    ────
+  Subtotal:                         $39
 
-### 2. Reasoning-Augmented Image Generation
-Inspired by Nano Banana Pro, this system:
-- Generates "thought images" before final generation
-- Predicts layout tokens and binding tokens
-- Improves spatial coherence and composition
-- Achieves +15% quality improvement vs. base SDXL
+API Costs (500 generations/month):
+  • Replicate SDXL:         $2.75
+  • OpenAI GPT-4o-mini:     $0.08
+                                    ────
+  Subtotal:                         $3
 
-### 3. Hybrid Agent Coordination
-Combines two protocols:
-- **MCP**: Structured tool calling for deterministic operations
-- **A2A**: Flexible messaging for agent collaboration
-- **Temporal.io**: Durable workflows with built-in saga patterns
+TOTAL: ~$42/month
+────────────────────────────────────────
+Perfect for student budgets! 🎓
+```
 
-### 4. Continuous Learning Architecture
-Feedback loop that:
-- Aggregates user signals (thumbs, edits, approvals)
-- Updates knowledge graph in real-time
-- Triggers LoRA retraining when drift detected
+Compare to production: $62,100/month (99.93% savings!)
+
+---
+
+## 📅 8-Week Implementation Timeline
+
+| Week | Focus | Deliverable |
+|------|-------|-------------|
+| 1-2 | **Foundation** | Backend + Database + API integrations |
+| 3-4 | **Generation** | Image + Text + Validation working |
+| 5-6 | **Integration** | Multi-agent orchestration + Frontend + Feedback |
+| 7-8 | **Polish** | Testing + Deployment + Demo prep |
+
+See [07-capstone-implementation.md](docs/architecture/07-capstone-implementation.md) for detailed week-by-week tasks.
+
+---
+
+## 📊 Technology Stack (Simplified)
+
+| Component | Choice | Why |
+|-----------|--------|-----|
+| **Frontend** | React + Vite | Modern, fast, easy to learn |
+| **Backend** | FastAPI | Python async, auto-docs |
+| **Database** | Neo4j Community | Free, graph + vector search |
+| **Cache** | Redis | Simple, fast |
+| **Image API** | Replicate (SDXL) | No GPU infrastructure needed |
+| **Text API** | OpenAI (GPT-4o-mini) | 15x cheaper than GPT-4 Turbo |
+| **Deployment** | Docker Compose | Simple, reproducible |
+| **Hosting** | DigitalOcean | Student-friendly pricing |
+---
+
+## 🎓 What This Project Teaches
+
+### Core Computer Science Concepts
+✅ **Graph Algorithms** - Traversal, pathfinding, relationship modeling  
+✅ **Distributed Systems** - Async communication, event-driven architecture  
+✅ **API Design** - REST principles, async endpoints, webhooks  
+✅ **Database Design** - Graph databases, vector search, indexing  
+✅ **Software Engineering** - Docker, CI/CD, testing, documentation
+
+### Modern AI/ML Practices
+✅ **Prompt Engineering** - Context-aware generation, few-shot learning  
+✅ **API Integration** - OpenAI, Replicate, rate limiting, error handling  
+✅ **Multi-Agent Systems** - Coordination patterns, task distribution  
+✅ **Quality Validation** - Automated scoring, feedback loops
+
+### Full-Stack Development
+✅ **Frontend** - React, state management, API integration  
+✅ **Backend** - Python, FastAPI, async programming  
+✅ **DevOps** - Docker Compose, environment management  
+✅ **System Design** - Architecture diagrams, tradeoff analysis
+
+---
+
+## 📝 Project Status
+
+- [x] Architecture documentation complete (7 documents)
+- [x] Cost analysis and optimization
+- [x] Technology stack selection
+- [ ] Backend implementation (Weeks 1-2)
+- [ ] Database setup and schema (Weeks 1-2)
+- [ ] API integrations (Weeks 3-4)
+- [ ] Multi-agent system (Weeks 5-6)
+- [ ] Frontend development (Weeks 5-6)
+- [ ] Deployment (Weeks 7-8)
+- [ ] Demo preparation (Week 8)
+
+**Current Phase**: Documentation Complete → Starting Implementation
+
+---
+
+## 🤝 Contributing
+
+This is a capstone project, but suggestions and improvements welcome!
+
+- 🐛 Report bugs or issues
+- 💡 Suggest improvements
+- 🔧 Contribute code (PRs welcome)
+- ⭐ Star the repo if you find it helpful!
+
+---
+
+## 📄 License
+
+MIT License - Feel free to use for your own capstone/learning projects!
+
+---
+
+## 🙏 Acknowledgments
+
+- **Neo4j** for graph database technology and educational resources
+- **Stability AI** for the open-source SDXL model
+- **OpenAI** for LLM capabilities and API access
+- **Replicate** for simple AI model deployment
+- **Microsoft Research** for GraphRAG research papers
+- **Google DeepMind** for reasoning-augmented generation concepts
+
+---
+
+## 🔗 Resources for Learning
+
+### Graph Databases
+- [Neo4j GraphAcademy](https://graphacademy.neo4j.com/) - Free courses
+- [Graph Algorithms Book](https://neo4j.com/graph-algorithms-book/) - By Neo4j
+
+### AI/ML
+- [OpenAI Cookbook](https://cookbook.openai.com/) - Prompt engineering
+- [Replicate Documentation](https://replicate.com/docs) - Image generation
+- [Hugging Face](https://huggingface.co/docs) - ML model hub
+
+### Backend Development
+- [FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/) - Modern Python API
+- [Neo4j Python Driver](https://neo4j.com/docs/python-manual/) - Graph queries
+
+### Frontend Development
+- [React Documentation](https://react.dev/) - UI framework
+- [Vite Guide](https://vitejs.dev/guide/) - Build tool
+
+### System Design
+- [System Design Primer](https://github.com/donnemartin/system-design-primer) - Concepts
+- [AWS Well-Architected](https://aws.amazon.com/architecture/well-architected/) - Best practices
+
+---
+
+## 📧 Contact
+
+**Project**: Brand-Aligned Content Generation System  
+**Type**: College Capstone Project  
+**Year**: 2026  
+**Repository**: [GitHub](https://github.com/Shreyas70773/system-design-graph-rag-reasoning-image-resource-management-software)
+
+For questions, suggestions, or collaboration opportunities, please open an issue on GitHub!
+
+---
+
+**⭐ Remember**: This project demonstrates both production-scale thinking (in the architecture docs) and practical capstone execution (in the implementation plan). The goal is to learn modern system design principles while building something demo-able in 8 weeks!
 - Maintains per-brand quality metrics
 
 ---
