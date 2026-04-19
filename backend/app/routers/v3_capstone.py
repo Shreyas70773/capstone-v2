@@ -18,6 +18,7 @@ from app.capstone.models import (
     RecordEditRequest,
     SegmentationTuning,
     SegmentClickRequest,
+    SegmentFreehandRequest,
     UpdateAspectRatioRequest,
 )
 from app.capstone.inference import LaMaUnavailableError, SAM2UnavailableError, lama_inpainter, sam2_segmenter
@@ -58,6 +59,24 @@ def get_accuracy_presets():
             "balanced": InpaintTuning().model_dump(),
             "background_cleanup": InpaintTuning(mask_dilate_px=8, neighbor_limit=6).model_dump(),
             "detail_preserve": InpaintTuning(mask_dilate_px=2, neighbor_limit=4).model_dump(),
+            "refine_soft": InpaintTuning(
+                mask_dilate_px=2,
+                neighbor_limit=5,
+                enable_refinement=True,
+                refine_n_iters=6,
+                refine_lr=0.001,
+                refine_max_scales=2,
+                refine_px_budget=1200000,
+            ).model_dump(),
+            "hq_refine": InpaintTuning(
+                mask_dilate_px=3,
+                neighbor_limit=5,
+                enable_refinement=True,
+                refine_n_iters=10,
+                refine_lr=0.0012,
+                refine_max_scales=2,
+                refine_px_budget=1400000,
+            ).model_dump(),
         },
     }
 
@@ -226,6 +245,50 @@ def segment_click(scene_id: str, req: SegmentClickRequest):
     return result
 
 
+@router.post("/scenes/{scene_id}/segment-freehand")
+def segment_freehand(scene_id: str, req: SegmentFreehandRequest):
+    try:
+        scene_doc = capstone_scene_store.get_scene(scene_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+
+    paths = [[(point.x, point.y) for point in path.points] for path in req.paths]
+    try:
+        result = sam2_segmenter.segment_from_freehand(
+            scene_doc.scene.image_path,
+            paths=paths,
+            mode=req.mode,
+            brush_size_px=req.brush_size_px,
+            label=req.label,
+            tuning=req.tuning,
+            sam_refine=req.sam_refine,
+        )
+    except SAM2UnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Freehand segmentation failed: {exc}") from exc
+
+    if req.register_object:
+        bbox = result["bbox"]
+        updated = capstone_scene_store.upsert_segmented_object(
+            scene_id,
+            class_label=req.label,
+            bbox=BoundingBox(x=bbox[0], y=bbox[1], w=bbox[2] - bbox[0], h=bbox[3] - bbox[1]),
+            mask_path=result["mask_url"],
+            confidence=min(req.confidence, float(result.get("score", req.confidence))),
+            object_id=req.object_id,
+            z_order=req.z_order,
+        )
+        object_id = req.object_id
+        if object_id is None:
+            object_id = updated.objects[-1].object_id
+        result["scene_object_id"] = object_id
+        result["spatial_relationships"] = updated.spatial_relationships
+        result["registered_object"] = next((obj for obj in updated.objects if obj.object_id == object_id), None)
+
+    return result
+
+
 @router.post("/scenes/{scene_id}/remove-object")
 def remove_object(scene_id: str, req: RemoveObjectRequest):
     try:
@@ -260,6 +323,14 @@ def remove_object(scene_id: str, req: RemoveObjectRequest):
         "removed_object_id": req.object_id,
         "result_url": result["result_url"],
         "method": result["method"],
+        "refine_requested": bool(result.get("refine_requested", False)),
+        "refine_enabled": bool(result.get("refine_enabled", False)),
+        "refine_supported": bool(result.get("refine_supported", False)),
+        "refine_skip_reason": result.get("refine_skip_reason", ""),
+        "refine_pipeline": result.get("refine_pipeline", "predict"),
+        "refine_overrides": result.get("refine_overrides", []),
+        "mask_area_fraction": result.get("mask_area_fraction", None),
+        "refiner": result.get("refiner", {}),
         "context_neighbors": neighbors,
         "scene": updated.scene,
         "objects": updated.objects,

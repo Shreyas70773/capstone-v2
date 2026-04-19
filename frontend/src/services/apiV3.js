@@ -47,6 +47,11 @@ export async function segmentCapstoneClick(sceneId, payload) {
   return response.data
 }
 
+export async function segmentCapstoneFreehand(sceneId, payload) {
+  const response = await apiV3.post(`/api/v3/scenes/${sceneId}/segment-freehand`, payload)
+  return response.data
+}
+
 export async function removeCapstoneObject(sceneId, payload) {
   const response = await apiV3.post(`/api/v3/scenes/${sceneId}/remove-object`, payload)
   return response.data

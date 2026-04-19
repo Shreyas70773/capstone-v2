@@ -118,3 +118,36 @@ def test_json_props_serializes_nested_values_for_neo4j():
     assert isinstance(props["bbox"], str)
     assert isinstance(props["graph_snapshot_json"], str)
     assert isinstance(props["list_of_maps"], str)
+
+
+def test_capstone_store_neo4j_disconnect_is_non_fatal(tmp_path, monkeypatch):
+    store = CapstoneSceneStore()
+    store.root = Path(tmp_path)
+
+    closed = {"called": False}
+
+    monkeypatch.setattr("app.capstone.store.neo4j_client._driver", object())
+    monkeypatch.setattr("app.capstone.store.neo4j_client._connection_attempted", True)
+
+    def _raise_defunct(*args, **kwargs):
+        raise RuntimeError("Failed to read from defunct connection")
+
+    def _close():
+        closed["called"] = True
+
+    monkeypatch.setattr("app.capstone.store.neo4j_client.execute_query", _raise_defunct)
+    monkeypatch.setattr("app.capstone.store.neo4j_client.close", _close)
+
+    scene = store.create_scene(
+        CreateSceneRequest(
+            image_path="/tmp/original.png",
+            canvas_width=1280,
+            canvas_height=720,
+            aspect_ratio="16:9",
+        )
+    )
+
+    assert scene.scene.scene_id
+    assert closed["called"] is True
+    reloaded = store.get_scene(scene.scene.scene_id)
+    assert reloaded.scene.scene_id == scene.scene.scene_id

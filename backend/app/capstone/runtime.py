@@ -28,6 +28,14 @@ class CapstoneRuntimeSettings(BaseModel):
     lama_repo_path: Optional[Path] = None
     lama_model_path: Optional[Path] = None
     lama_python_executable: str = sys.executable
+    lama_refiner_gpu_ids: str = "0,"
+    lama_refiner_modulo: int = 8
+    lama_refiner_n_iters: int = 8
+    lama_refiner_lr: float = 0.0012
+    lama_refiner_min_side: int = 512
+    lama_refiner_max_scales: int = 2
+    lama_refiner_px_budget: int = 1400000
+    lama_refiner_max_mask_area_fraction: float = 0.35
     device_preference: Literal["auto", "cuda", "cpu"] = "auto"
     public_upload_subdir: str = "capstone"
     allow_mock_fallbacks: bool = False
@@ -99,6 +107,16 @@ def get_capstone_runtime_settings() -> CapstoneRuntimeSettings:
         lama_repo_path=Path(lama_repo) if lama_repo else None,
         lama_model_path=Path(lama_model) if lama_model else None,
         lama_python_executable=os.environ.get("CAPSTONE_LAMA_PYTHON", sys.executable),
+        lama_refiner_gpu_ids=os.environ.get("CAPSTONE_LAMA_REFINER_GPU_IDS", "0,"),
+        lama_refiner_modulo=int(os.environ.get("CAPSTONE_LAMA_REFINER_MODULO", "8")),
+        lama_refiner_n_iters=int(os.environ.get("CAPSTONE_LAMA_REFINER_N_ITERS", "8")),
+        lama_refiner_lr=float(os.environ.get("CAPSTONE_LAMA_REFINER_LR", "0.0012")),
+        lama_refiner_min_side=int(os.environ.get("CAPSTONE_LAMA_REFINER_MIN_SIDE", "512")),
+        lama_refiner_max_scales=int(os.environ.get("CAPSTONE_LAMA_REFINER_MAX_SCALES", "2")),
+        lama_refiner_px_budget=int(os.environ.get("CAPSTONE_LAMA_REFINER_PX_BUDGET", "1400000")),
+        lama_refiner_max_mask_area_fraction=float(
+            os.environ.get("CAPSTONE_LAMA_REFINER_MAX_MASK_AREA_FRACTION", "0.35")
+        ),
         device_preference=os.environ.get("CAPSTONE_DEVICE", "auto"),  # type: ignore[arg-type]
         public_upload_subdir=os.environ.get("CAPSTONE_UPLOAD_SUBDIR", "capstone"),
         allow_mock_fallbacks=_env_bool("CAPSTONE_ALLOW_MOCK_FALLBACKS", False),

@@ -349,9 +349,22 @@ class CapstoneSceneStore:
         if driver is None:
             return
 
+        def _execute_or_abort(query: str, parameters: Dict[str, Any]) -> bool:
+            try:
+                neo4j_client.execute_query(query, parameters)
+                return True
+            except Exception as exc:
+                # Keep JSON store as source of truth even if Neo4j is transiently unavailable.
+                try:
+                    neo4j_client.close()
+                except Exception:
+                    pass
+                print(f"[WARN] Capstone Neo4j sync skipped for scene {doc.scene.scene_id}: {exc}")
+                return False
+
         scene_props = self._json_props(doc.scene.model_dump(mode="json"))
         user_props = self._json_props(doc.user.model_dump(mode="json"))
-        neo4j_client.execute_query(
+        if not _execute_or_abort(
             """
             MERGE (u:User:CapstoneUser {user_id: $user.user_id})
             SET u += $user
@@ -360,19 +373,21 @@ class CapstoneSceneStore:
             MERGE (u)-[:OWNS]->(s)
             """,
             {"user": user_props, "scene": scene_props},
-        )
+        ):
+            return
 
-        neo4j_client.execute_query(
+        if not _execute_or_abort(
             """
             MATCH (s:CapstoneScene {scene_id: $scene_id})
             OPTIONAL MATCH (s)-[:CONTAINS_OBJECT|CONTAINS_TEXT|HAS_VERSION|HAS_EDIT]->(n)
             DETACH DELETE n
             """,
             {"scene_id": doc.scene.scene_id},
-        )
+        ):
+            return
 
         for obj in doc.objects:
-            neo4j_client.execute_query(
+            if not _execute_or_abort(
                 """
                 MATCH (s:CapstoneScene {scene_id: $scene_id})
                 CREATE (o:ImageObject:CapstoneImageObject $props)
@@ -383,10 +398,11 @@ class CapstoneSceneStore:
                     "layer_index": obj.z_order,
                     "props": self._json_props(obj.model_dump(mode="json")),
                 },
-            )
+            ):
+                return
 
         for rel in doc.spatial_relationships:
-            neo4j_client.execute_query(
+            if not _execute_or_abort(
                 """
                 MATCH (src:CapstoneImageObject {object_id: $source_id})
                 MATCH (dst:CapstoneImageObject {object_id: $target_id})
@@ -405,10 +421,11 @@ class CapstoneSceneStore:
                     "confidence": rel.confidence,
                     "distance_px": rel.distance_px,
                 },
-            )
+            ):
+                return
 
         for text in doc.text_regions:
-            neo4j_client.execute_query(
+            if not _execute_or_abort(
                 """
                 MATCH (s:CapstoneScene {scene_id: $scene_id})
                 MATCH (o:CapstoneImageObject {object_id: $text_object_id})
@@ -426,11 +443,12 @@ class CapstoneSceneStore:
                     "attached_object_id": text.attached_object_id,
                     "props": self._json_props(text.model_dump(mode="json")),
                 },
-            )
+            ):
+                return
 
         previous_event_id: Optional[str] = None
         for version, event in zip(doc.canvas_versions, doc.edit_events):
-            neo4j_client.execute_query(
+            if not _execute_or_abort(
                 """
                 MATCH (s:CapstoneScene {scene_id: $scene_id})
                 CREATE (v:CanvasVersion:CapstoneCanvasVersion $props)
@@ -441,8 +459,9 @@ class CapstoneSceneStore:
                     "is_current": version.is_current,
                     "props": self._json_props(version.model_dump(mode="json")),
                 },
-            )
-            neo4j_client.execute_query(
+            ):
+                return
+            if not _execute_or_abort(
                 """
                 MATCH (s:CapstoneScene {scene_id: $scene_id})
                 CREATE (e:EditEvent:CapstoneEditEvent $props)
@@ -452,16 +471,18 @@ class CapstoneSceneStore:
                     "scene_id": doc.scene.scene_id,
                     "props": self._json_props(event.model_dump(mode="json")),
                 },
-            )
+            ):
+                return
             if previous_event_id is not None:
-                neo4j_client.execute_query(
+                if not _execute_or_abort(
                     """
                     MATCH (prev:CapstoneEditEvent {event_id: $prev_event_id})
                     MATCH (curr:CapstoneEditEvent {event_id: $event_id})
                     CREATE (curr)-[:PREV_EDIT]->(prev)
                     """,
                     {"prev_event_id": previous_event_id, "event_id": event.event_id},
-                )
+                ):
+                    return
             previous_event_id = event.event_id
 
     @staticmethod

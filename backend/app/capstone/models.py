@@ -192,6 +192,14 @@ class InpaintTuning(CapstoneModel):
     mask_dilate_px: int = Field(default=4, ge=0, le=64)
     neighbor_limit: int = Field(default=5, ge=1, le=20)
     preserve_text_regions: bool = True
+    enable_refinement: bool = False
+    refine_gpu_ids: Optional[str] = None
+    refine_modulo: Optional[int] = Field(default=None, ge=1, le=64)
+    refine_n_iters: int = Field(default=8, ge=1, le=200)
+    refine_lr: float = Field(default=0.0012, gt=0.0, le=0.05)
+    refine_min_side: int = Field(default=512, ge=64, le=4096)
+    refine_max_scales: int = Field(default=2, ge=1, le=8)
+    refine_px_budget: int = Field(default=1400000, ge=65536, le=100000000)
 
 
 class SegmentClickRequest(CapstoneModel):
@@ -202,6 +210,28 @@ class SegmentClickRequest(CapstoneModel):
     object_id: Optional[str] = None
     register_object: bool = True
     z_order: Optional[int] = None
+    tuning: Optional[SegmentationTuning] = None
+
+
+class FreehandPoint(CapstoneModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
+class FreehandPath(CapstoneModel):
+    points: List[FreehandPoint] = Field(min_length=2, max_length=8192)
+
+
+class SegmentFreehandRequest(CapstoneModel):
+    paths: List[FreehandPath] = Field(min_length=1, max_length=256)
+    mode: Literal["brush", "lasso"] = "brush"
+    brush_size_px: int = Field(default=24, ge=1, le=256)
+    label: str = "object"
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    object_id: Optional[str] = None
+    register_object: bool = True
+    z_order: Optional[int] = None
+    sam_refine: bool = True
     tuning: Optional[SegmentationTuning] = None
 
 
