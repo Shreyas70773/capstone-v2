@@ -62,6 +62,58 @@ AVAILABLE_FONTS = {
     }
 }
 
+# Per-font system fallback list used when bundled TTF files are not present.
+# This keeps visual variation across selected font IDs instead of collapsing to one default.
+SYSTEM_FONT_FALLBACKS = {
+    "montserrat": [
+        "C:\\Windows\\Fonts\\calibrib.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "playfair": [
+        "C:\\Windows\\Fonts\\georgiab.ttf",
+        "C:\\Windows\\Fonts\\timesbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    ],
+    "roboto": [
+        "C:\\Windows\\Fonts\\segoeuib.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
+    "poppins": [
+        "C:\\Windows\\Fonts\\verdanab.ttf",
+        "C:\\Windows\\Fonts\\calibrib.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "oswald": [
+        "C:\\Windows\\Fonts\\impact.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+    ],
+    "lora": [
+        "C:\\Windows\\Fonts\\cambriaz.ttf",
+        "C:\\Windows\\Fonts\\georgiab.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    ],
+    "raleway": [
+        "C:\\Windows\\Fonts\\calibril.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
+    "bebas": [
+        "C:\\Windows\\Fonts\\impact.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+}
+
+GENERIC_FONT_FALLBACKS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+]
+
 # Text placement options
 TEXT_LAYOUTS = {
     "top_centered": {
@@ -101,6 +153,10 @@ def get_available_fonts() -> List[Dict[str, str]]:
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     """Convert hex color to RGB tuple"""
     hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 3:
+        hex_color = ''.join(ch * 2 for ch in hex_color)
+    if len(hex_color) != 6:
+        raise ValueError(f"Invalid hex color: {hex_color}")
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
@@ -150,16 +206,17 @@ def load_font(font_id: str, size: int) -> ImageFont.FreeTypeFont:
                 return ImageFont.truetype(font_path, size)
             except:
                 pass
+
+    # Try system fonts that approximate the selected family.
+    for font_path in SYSTEM_FONT_FALLBACKS.get(font_id, []):
+        if os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, size)
+            except:
+                continue
     
     # Try common system font locations
-    system_fonts = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\arialbd.ttf",
-    ]
-    
-    for font_path in system_fonts:
+    for font_path in GENERIC_FONT_FALLBACKS:
         if os.path.exists(font_path):
             try:
                 return ImageFont.truetype(font_path, size)
@@ -184,6 +241,55 @@ def add_text_shadow(
     draw.text((x + offset, y + offset), text, font=font, fill=shadow_color)
 
 
+def draw_styled_text(
+    draw: ImageDraw.ImageDraw,
+    position: Tuple[int, int],
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    text_color: Tuple[int, int, int],
+    style: str = "shadow",
+    shadow_offset: int = 3,
+) -> None:
+    """Draw text with style variants supported by the frontend controls."""
+    x, y = position
+    style_name = (style or "shadow").lower()
+
+    if style_name == "clean":
+        draw.text((x, y), text, font=font, fill=(*text_color, 255))
+        return
+
+    if style_name == "outline":
+        outline_color = (0, 0, 0, 220) if sum(text_color) > 382 else (255, 255, 255, 220)
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
+        draw.text((x, y), text, font=font, fill=(*text_color, 255))
+        return
+
+    if style_name == "bold":
+        draw.text((x, y), text, font=font, fill=(*text_color, 255))
+        draw.text((x + 1, y), text, font=font, fill=(*text_color, 255))
+        draw.text((x, y + 1), text, font=font, fill=(*text_color, 255))
+        return
+
+    if style_name == "glow":
+        # A soft halo around the glyphs improves readability on busy backgrounds.
+        glow_color = (*text_color, 120)
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (-2, 2), (2, -2), (2, 2)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=glow_color)
+        draw.text((x, y), text, font=font, fill=(*text_color, 255))
+        return
+
+    if style_name == "cinematic":
+        # Dramatic drop shadow with slight weight layering.
+        add_text_shadow(draw, (x, y), text, font, shadow_color=(0, 0, 0, 190), offset=5)
+        draw.text((x, y), text, font=font, fill=(*text_color, 255))
+        draw.text((x + 1, y), text, font=font, fill=(*text_color, 230))
+        return
+
+    add_text_shadow(draw, (x, y), text, font, offset=shadow_offset)
+    draw.text((x, y), text, font=font, fill=(*text_color, 255))
+
+
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.ImageDraw) -> List[str]:
     """Wrap text to fit within max_width"""
     words = text.split()
@@ -206,6 +312,17 @@ def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: Ima
         lines.append(' '.join(current_line))
     
     return lines
+
+
+def apply_line_limit(lines: List[str], max_lines: Optional[int]) -> List[str]:
+    """Limit rendered lines and add ellipsis when content is truncated."""
+    if not max_lines or max_lines <= 0 or len(lines) <= max_lines:
+        return lines
+
+    limited_lines = lines[:max_lines]
+    if limited_lines:
+        limited_lines[-1] = f"{limited_lines[-1].rstrip()}..."
+    return limited_lines
 
 
 def create_gradient_overlay(
@@ -264,6 +381,10 @@ def composite_text_on_image(
     # Get brand preferences
     font_id = brand_context.get('font_id', 'montserrat')
     brand_colors = brand_context.get('colors', [])
+    text_style = brand_context.get('text_style', 'shadow')
+    requested_text_color = brand_context.get('text_color')
+    headline_max_lines = brand_context.get('headline_max_lines')
+    body_max_lines = brand_context.get('body_max_lines')
     
     # Determine text color based on layout position
     if layout in ["bottom_centered", "bottom_left"]:
@@ -276,7 +397,8 @@ def composite_text_on_image(
     # Get background color in text region
     bg_color = get_dominant_color_region(image, region)
     
-    # Use primary brand color for text if available and contrasts well
+    # Use primary brand color for text if available and contrasts well.
+    # This serves as the fallback when an explicit text color is not provided.
     if brand_colors:
         primary_hex = brand_colors[0].get('hex', '#FFFFFF')
         primary_rgb = hex_to_rgb(primary_hex)
@@ -286,11 +408,19 @@ def composite_text_on_image(
         
         # If good contrast, use brand color; otherwise use contrasting black/white
         if abs(bg_luminance - primary_luminance) > 0.4:
-            text_color = primary_rgb
+            fallback_text_color = primary_rgb
         else:
-            text_color = get_contrasting_color(bg_color)
+            fallback_text_color = get_contrasting_color(bg_color)
     else:
-        text_color = get_contrasting_color(bg_color)
+        fallback_text_color = get_contrasting_color(bg_color)
+
+    if requested_text_color:
+        try:
+            text_color = hex_to_rgb(requested_text_color)
+        except Exception:
+            text_color = fallback_text_color
+    else:
+        text_color = fallback_text_color
     
     # Create overlay layer for text
     text_layer = Image.new('RGBA', (width, height), (0, 0, 0, 0))
@@ -330,6 +460,7 @@ def composite_text_on_image(
         # Draw body copy first (at bottom)
         if body_copy:
             body_lines = wrap_text(body_copy, body_font, max_text_width, draw)
+            body_lines = apply_line_limit(body_lines, body_max_lines)
             body_lines.reverse()  # Start from bottom
             for line in body_lines:
                 bbox = draw.textbbox((0, 0), line, font=body_font)
@@ -337,16 +468,15 @@ def composite_text_on_image(
                 line_width = bbox[2] - bbox[0]
                 x = (width - line_width) // 2
                 current_y -= line_height + 5
-                
-                # Add shadow
-                add_text_shadow(draw, (x, current_y), line, body_font)
-                draw.text((x, current_y), line, font=body_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (x, current_y), line, body_font, text_color, text_style)
             
             current_y -= int(height * 0.03)  # Gap between body and headline
         
         # Draw headline above body
         if headline:
-            headline_lines = wrap_text(headline.upper(), headline_font, max_text_width, draw)
+            headline_lines = wrap_text(headline, headline_font, max_text_width, draw)
+            headline_lines = apply_line_limit(headline_lines, headline_max_lines)
             headline_lines.reverse()
             for line in headline_lines:
                 bbox = draw.textbbox((0, 0), line, font=headline_font)
@@ -354,24 +484,23 @@ def composite_text_on_image(
                 line_width = bbox[2] - bbox[0]
                 x = (width - line_width) // 2
                 current_y -= line_height + 8
-                
-                add_text_shadow(draw, (x, current_y), line, headline_font, offset=4)
-                draw.text((x, current_y), line, font=headline_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (x, current_y), line, headline_font, text_color, text_style, shadow_offset=4)
     
     elif layout == "top_centered":
         current_y = padding_vertical
         
         # Draw headline first (at top)
         if headline:
-            headline_lines = wrap_text(headline.upper(), headline_font, max_text_width, draw)
+            headline_lines = wrap_text(headline, headline_font, max_text_width, draw)
+            headline_lines = apply_line_limit(headline_lines, headline_max_lines)
             for line in headline_lines:
                 bbox = draw.textbbox((0, 0), line, font=headline_font)
                 line_height = bbox[3] - bbox[1]
                 line_width = bbox[2] - bbox[0]
                 x = (width - line_width) // 2
-                
-                add_text_shadow(draw, (x, current_y), line, headline_font, offset=4)
-                draw.text((x, current_y), line, font=headline_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (x, current_y), line, headline_font, text_color, text_style, shadow_offset=4)
                 current_y += line_height + 8
             
             current_y += int(height * 0.02)
@@ -379,14 +508,14 @@ def composite_text_on_image(
         # Draw body below headline
         if body_copy:
             body_lines = wrap_text(body_copy, body_font, max_text_width, draw)
+            body_lines = apply_line_limit(body_lines, body_max_lines)
             for line in body_lines:
                 bbox = draw.textbbox((0, 0), line, font=body_font)
                 line_height = bbox[3] - bbox[1]
                 line_width = bbox[2] - bbox[0]
                 x = (width - line_width) // 2
-                
-                add_text_shadow(draw, (x, current_y), line, body_font)
-                draw.text((x, current_y), line, font=body_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (x, current_y), line, body_font, text_color, text_style)
                 current_y += line_height + 5
     
     elif layout == "center_overlay":
@@ -396,7 +525,8 @@ def composite_text_on_image(
         body_lines = []
         
         if headline:
-            headline_lines = wrap_text(headline.upper(), headline_font, max_text_width, draw)
+            headline_lines = wrap_text(headline, headline_font, max_text_width, draw)
+            headline_lines = apply_line_limit(headline_lines, headline_max_lines)
             for line in headline_lines:
                 bbox = draw.textbbox((0, 0), line, font=headline_font)
                 total_height += bbox[3] - bbox[1] + 8
@@ -404,6 +534,7 @@ def composite_text_on_image(
         if body_copy:
             total_height += int(height * 0.03)  # Gap
             body_lines = wrap_text(body_copy, body_font, max_text_width, draw)
+            body_lines = apply_line_limit(body_lines, body_max_lines)
             for line in body_lines:
                 bbox = draw.textbbox((0, 0), line, font=body_font)
                 total_height += bbox[3] - bbox[1] + 5
@@ -416,9 +547,8 @@ def composite_text_on_image(
             line_height = bbox[3] - bbox[1]
             line_width = bbox[2] - bbox[0]
             x = (width - line_width) // 2
-            
-            add_text_shadow(draw, (x, current_y), line, headline_font, offset=4)
-            draw.text((x, current_y), line, font=headline_font, fill=(*text_color, 255))
+
+            draw_styled_text(draw, (x, current_y), line, headline_font, text_color, text_style, shadow_offset=4)
             current_y += line_height + 8
         
         if headline_lines and body_lines:
@@ -430,9 +560,8 @@ def composite_text_on_image(
             line_height = bbox[3] - bbox[1]
             line_width = bbox[2] - bbox[0]
             x = (width - line_width) // 2
-            
-            add_text_shadow(draw, (x, current_y), line, body_font)
-            draw.text((x, current_y), line, font=body_font, fill=(*text_color, 255))
+
+            draw_styled_text(draw, (x, current_y), line, body_font, text_color, text_style)
             current_y += line_height + 5
     
     elif layout == "bottom_left":
@@ -441,27 +570,27 @@ def composite_text_on_image(
         
         if body_copy:
             body_lines = wrap_text(body_copy, body_font, max_text_width * 0.7, draw)
+            body_lines = apply_line_limit(body_lines, body_max_lines)
             body_lines.reverse()
             for line in body_lines:
                 bbox = draw.textbbox((0, 0), line, font=body_font)
                 line_height = bbox[3] - bbox[1]
                 current_y -= line_height + 5
-                
-                add_text_shadow(draw, (padding_left, current_y), line, body_font)
-                draw.text((padding_left, current_y), line, font=body_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (padding_left, current_y), line, body_font, text_color, text_style)
             
             current_y -= int(height * 0.02)
         
         if headline:
-            headline_lines = wrap_text(headline.upper(), headline_font, max_text_width * 0.8, draw)
+            headline_lines = wrap_text(headline, headline_font, max_text_width * 0.8, draw)
+            headline_lines = apply_line_limit(headline_lines, headline_max_lines)
             headline_lines.reverse()
             for line in headline_lines:
                 bbox = draw.textbbox((0, 0), line, font=headline_font)
                 line_height = bbox[3] - bbox[1]
                 current_y -= line_height + 8
-                
-                add_text_shadow(draw, (padding_left, current_y), line, headline_font, offset=4)
-                draw.text((padding_left, current_y), line, font=headline_font, fill=(*text_color, 255))
+
+                draw_styled_text(draw, (padding_left, current_y), line, headline_font, text_color, text_style, shadow_offset=4)
     
     # Composite text layer onto image
     result = Image.alpha_composite(image, text_layer)
@@ -491,7 +620,7 @@ def add_logo_to_image(
     Args:
         image_bytes: The base image bytes
         logo_bytes: The logo image bytes
-        position: Where to place the logo (top_left, top_right, bottom_left, bottom_right, center)
+        position: Where to place the logo (top_left, top_center, top_right, bottom_left, bottom_center, bottom_right, center)
         scale: Logo size as fraction of image width (default 12%)
         padding: Padding from edge as fraction of image size (default 3%)
         opacity: Logo opacity (0-1, default 0.9)
@@ -525,10 +654,14 @@ def add_logo_to_image(
     
     if position == "top_left":
         pos = (pad_x, pad_y)
+    elif position == "top_center":
+        pos = ((img_width - target_width) // 2, pad_y)
     elif position == "top_right":
         pos = (img_width - target_width - pad_x, pad_y)
     elif position == "bottom_left":
         pos = (pad_x, img_height - target_height - pad_y)
+    elif position == "bottom_center":
+        pos = ((img_width - target_width) // 2, img_height - target_height - pad_y)
     elif position == "bottom_right":
         pos = (img_width - target_width - pad_x, img_height - target_height - pad_y)
     elif position == "center":

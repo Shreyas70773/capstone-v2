@@ -6,7 +6,7 @@ import {
   Brain, Zap, Eye, History, User, ChevronDown, Copy, Linkedin, Download, Search, 
   Lightbulb, TrendingUp, Calendar, FileText, X, Edit3
 } from 'lucide-react'
-import { getBrand, generateContent, generateAdvancedContent, getBrandProducts, getLearnedPreferences, getBrandDNA, generateWithBrandDNA, discoverTrendingTopics, generateContentIdeas, generateLinkedInPostAI } from '../services/api'
+import { getBrand, generateContent, generateAdvancedContent, getBrandProducts, getLearnedPreferences, getBrandDNA, generateWithBrandDNA, discoverTrendingTopics, generateContentIdeas, generateLinkedInPostAI, getAvailableFonts } from '../services/api'
 import { uploadCapstoneScene } from '../services/apiV3'
 
 // Text layout options
@@ -26,6 +26,107 @@ const LOGO_POSITIONS = [
   { id: 'bottom_center', name: 'Bottom Center', icon: '▼' },
   { id: 'bottom_right', name: 'Bottom Right', icon: '◢' },
 ]
+
+const DEFAULT_FONT_OPTIONS = [
+  { id: 'montserrat', name: 'Montserrat', description: 'Modern and clean' },
+  { id: 'playfair', name: 'Playfair Display', description: 'Elegant serif' },
+  { id: 'roboto', name: 'Roboto', description: 'Professional sans-serif' },
+  { id: 'poppins', name: 'Poppins', description: 'Friendly geometric' },
+  { id: 'oswald', name: 'Oswald', description: 'Bold condensed' },
+  { id: 'lora', name: 'Lora', description: 'Readable serif' },
+  { id: 'raleway', name: 'Raleway', description: 'Sleek minimalist' },
+  { id: 'bebas', name: 'Bebas Neue', description: 'Display all-caps' },
+]
+
+const FONT_PREVIEW_FAMILY = {
+  montserrat: 'Montserrat, Arial, sans-serif',
+  playfair: 'Playfair Display, Georgia, serif',
+  roboto: 'Roboto, Arial, sans-serif',
+  poppins: 'Poppins, Arial, sans-serif',
+  oswald: 'Oswald, Impact, sans-serif',
+  lora: 'Lora, Georgia, serif',
+  raleway: 'Raleway, Arial, sans-serif',
+  bebas: 'Bebas Neue, Impact, sans-serif',
+}
+
+const TEXT_STYLE_OPTIONS = [
+  { id: 'shadow', name: 'Shadow', preview: 'Depth with soft shadow' },
+  { id: 'clean', name: 'Clean', preview: 'Minimal and crisp' },
+  { id: 'outline', name: 'Outline', preview: 'Strong edge contrast' },
+  { id: 'bold', name: 'Bold', preview: 'Heavy visual weight' },
+  { id: 'glow', name: 'Glow', preview: 'Luminous highlight' },
+  { id: 'cinematic', name: 'Cinematic', preview: 'Subtle dramatic look' },
+]
+
+const INLINE_LAYOUT_CONFIG = {
+  bottom_centered: {
+    containerClass: 'justify-end items-center',
+    textAlign: 'center',
+    widthClass: 'max-w-[88%]',
+  },
+  top_centered: {
+    containerClass: 'justify-start items-center',
+    textAlign: 'center',
+    widthClass: 'max-w-[88%]',
+  },
+  center_overlay: {
+    containerClass: 'justify-center items-center',
+    textAlign: 'center',
+    widthClass: 'max-w-[82%]',
+  },
+  bottom_left: {
+    containerClass: 'justify-end items-start',
+    textAlign: 'left',
+    widthClass: 'max-w-[72%]',
+  },
+}
+
+const getFontPreviewFamily = (fontId) => FONT_PREVIEW_FAMILY[fontId] || 'Arial, sans-serif'
+
+const getTextEffectStyle = (style, color = '#FFFFFF') => {
+  if (style === 'clean') {
+    return { textShadow: 'none', fontWeight: 700 }
+  }
+
+  if (style === 'outline') {
+    return {
+      WebkitTextStroke: '1.2px rgba(0,0,0,0.75)',
+      textShadow: '0 0 2px rgba(0,0,0,0.55)',
+      fontWeight: 700,
+    }
+  }
+
+  if (style === 'bold') {
+    return {
+      fontWeight: 900,
+      textShadow: '0 2px 6px rgba(0,0,0,0.45)',
+      letterSpacing: '0.02em',
+    }
+  }
+
+  if (style === 'glow') {
+    return {
+      fontWeight: 700,
+      textShadow: `0 0 6px ${color}, 0 0 14px ${color}, 0 2px 10px rgba(0,0,0,0.45)`,
+    }
+  }
+
+  if (style === 'cinematic') {
+    return {
+      fontWeight: 800,
+      letterSpacing: '0.04em',
+      textTransform: 'uppercase',
+      textShadow: '0 3px 10px rgba(0,0,0,0.7)',
+    }
+  }
+
+  return {
+    fontWeight: 700,
+    textShadow: '0 3px 8px rgba(0,0,0,0.75)',
+  }
+}
+
+const isValidHexColor = (value) => /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test((value || '').trim())
 
 export default function Generate() {
   const { brandId } = useParams()
@@ -68,6 +169,21 @@ export default function Generate() {
   const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
   
+  // Text styling state
+  const [fontId, setFontId] = useState(defaultFont)
+  const [fontOptions, setFontOptions] = useState(DEFAULT_FONT_OPTIONS)
+  const [textStyle, setTextStyle] = useState('shadow')
+  const [textColor, setTextColor] = useState('#FFFFFF')
+  const [headlineMaxChars, setHeadlineMaxChars] = useState(null)
+  const [bodyMaxChars, setBodyMaxChars] = useState(null)
+  const [headlineMaxLines, setHeadlineMaxLines] = useState(null)
+  const [bodyMaxLines, setBodyMaxLines] = useState(null)
+  const [editingField, setEditingField] = useState(null) // 'headline', 'body', or null
+  const [editDraft, setEditDraft] = useState('') // Temporary text while editing
+  const [lastGeneratedConfig, setLastGeneratedConfig] = useState(null)
+  const [lastPromptUsed, setLastPromptUsed] = useState('')
+  const [refinementPrompt, setRefinementPrompt] = useState('')
+  
   // AI Content Creator state
   const [showContentCreator, setShowContentCreator] = useState(false)
   const [contentCreatorLoading, setContentCreatorLoading] = useState(false)
@@ -103,12 +219,17 @@ export default function Generate() {
   const loadBrandAndProducts = async () => {
     try {
       // Load brand DNA which includes products and characters
-      const [brandData, brandDNAData] = await Promise.all([
+      const [brandData, brandDNAData, fontsData] = await Promise.all([
         getBrand(brandId),
-        getBrandDNA(brandId).catch(() => ({ brand_dna: null }))
+        getBrandDNA(brandId).catch(() => ({ brand_dna: null })),
+        getAvailableFonts().catch(() => DEFAULT_FONT_OPTIONS)
       ])
       
       setBrand(brandData)
+
+      if (Array.isArray(fontsData) && fontsData.length > 0) {
+        setFontOptions(fontsData)
+      }
       
       // Set default headline if not already set
       if (brandData?.name && !headline) {
@@ -129,45 +250,90 @@ export default function Generate() {
     }
   }
   
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return
+  const handleGenerate = async (overridePrompt = null) => {
+    const promptCandidate = typeof overridePrompt === 'string' ? overridePrompt : prompt
+    const effectivePrompt = String(promptCandidate ?? '').trim()
+    if (!effectivePrompt) return
     
     setGenerating(true)
     setError(null)
     setResult(null)
+    setEditingField(null)
+    setEditDraft('')
+    setLastGeneratedConfig(null)
     
     try {
       let data;
       
       // Always use Brand DNA pipeline for GraphRAG
       if (useAdvancedMode) {
+        const shouldUseEditableOverlay = contentType === 'both' && includeTextOverlay
         // Use Brand DNA GraphRAG pipeline
-        data = await generateWithBrandDNA(brandId, {
-          prompt,
-          headline: contentType === 'both' && includeTextOverlay && headline.trim() ? headline.trim() : null,
-          body_copy: contentType === 'both' && includeTextOverlay && bodyCopy.trim() ? bodyCopy.trim() : null,
+        const generationRequest = {
+          prompt: effectivePrompt,
+          headline: shouldUseEditableOverlay && headline.trim() ? headline.trim() : null,
+          body_copy: shouldUseEditableOverlay && bodyCopy.trim() ? bodyCopy.trim() : null,
+          // Keep text editable in the frontend/Studio and avoid burning duplicate text into the image.
+          render_text_on_image: false,
           product_id: selectedProductId || null,
           character_id: selectedCharacterId || null,
           aspect_ratio: aspectRatio,
           text_layout: textLayout,
           include_logo: includeLogo && brand?.logo_url ? true : false,
+          logo_position: logoPosition,
+          font_id: fontId,
+          text_style: textStyle,
+          text_color: textColor,
+          headline_max_chars: headlineMaxChars,
+          body_max_chars: bodyMaxChars,
+          headline_max_lines: headlineMaxLines,
+          body_max_lines: bodyMaxLines,
           use_reasoning: true
+        }
+
+        data = await generateWithBrandDNA(brandId, generationRequest)
+
+        setLastGeneratedConfig({
+          textLayout: generationRequest.text_layout,
+          fontId: generationRequest.font_id,
+          textStyle: generationRequest.text_style,
+          textColor: generationRequest.text_color,
+          headline: typeof data?.headline === 'string' ? data.headline : (generationRequest.headline || ''),
+          bodyCopy: typeof data?.body_copy === 'string' ? data.body_copy : (generationRequest.body_copy || ''),
         })
       } else {
         // Use basic generation
-        data = await generateContent({
+        const basicRequest = {
           brandId,
-          prompt,
+          prompt: effectivePrompt,
           type: contentType,
           style: style || undefined,
           productIds: selectedProductId ? [selectedProductId] : undefined,
           textLayout: textLayout,
           includeTextOverlay: contentType === 'both' ? includeTextOverlay : false,
           includeLogo: includeLogo && brand?.logo_url ? true : false
+        }
+
+        data = await generateContent(basicRequest)
+
+        setLastGeneratedConfig({
+          textLayout,
+          fontId,
+          textStyle,
+          textColor,
+          headline: typeof data?.headline === 'string' ? data.headline : (headline || ''),
+          bodyCopy: typeof data?.body_copy === 'string' ? data.body_copy : (bodyCopy || ''),
         })
       }
       
       setResult(data)
+      if (typeof data?.headline === 'string') {
+        setHeadline(data.headline)
+      }
+      if (typeof data?.body_copy === 'string') {
+        setBodyCopy(data.body_copy)
+      }
+      setLastPromptUsed(effectivePrompt)
       
       // Scroll to result instead of navigating away immediately
       setTimeout(() => {
@@ -178,6 +344,25 @@ export default function Generate() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  const handleRegenerateWithRefinements = async () => {
+    const newRefinements = refinementPrompt.trim()
+    if (!newRefinements) {
+      setError('Add refinement notes first, then click regenerate.')
+      return
+    }
+
+    const previousPrompt = lastPromptUsed.trim() || prompt.trim()
+    if (!previousPrompt) {
+      setError('Generate at least once before using refinement regeneration.')
+      return
+    }
+
+    const chainedPrompt = `${previousPrompt}\n\nApply these additional refinements while keeping prior intent:\n${newRefinements}`
+    setPrompt(chainedPrompt)
+    setRefinementPrompt('')
+    await handleGenerate(chainedPrompt)
   }
   
   // Build brand profile for content creator
@@ -282,8 +467,10 @@ export default function Generate() {
   }
   
   const handleCopyLinkedIn = () => {
-    if (result?.headline || result?.body_copy) {
-      const text = `${result.headline || ''}\n\n${result.body_copy || ''}`
+    const copyHeadline = resolveInlineText('headline')
+    const copyBody = resolveInlineText('body')
+    if (copyHeadline || copyBody) {
+      const text = `${copyHeadline || ''}\n\n${copyBody || ''}`
       navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -308,7 +495,8 @@ export default function Generate() {
       // Fetch the image and convert to blob
       const response = await fetch(result.image_url)
       const blob = await response.blob()
-      const file = new File(blob, `${brand?.name || 'brand'}-generated.png`, { type: 'image/png' })
+      // File constructor requires array of buffers as first argument
+      const file = new File([blob], `${brand?.name || 'brand'}-generated.png`, { type: 'image/png' })
       
       // Upload to Studio
       const uploadResponse = await uploadCapstoneScene(file, {
@@ -316,9 +504,19 @@ export default function Generate() {
         ownerUserId: brandId
       })
       
-      if (uploadResponse?.scene_id) {
+      // Response can have scene_id at top level or nested under scene.scene_id
+      const sceneId = uploadResponse?.scene_id || uploadResponse?.scene?.scene_id
+      if (sceneId) {
+        const studioOverlay = {
+          headline: resolveInlineText('headline'),
+          bodyCopy: resolveInlineText('body'),
+          fontId: lastGeneratedConfig?.fontId || fontId,
+          textStyle: lastGeneratedConfig?.textStyle || textStyle,
+          textColor: lastGeneratedConfig?.textColor || textColor,
+          textLayout: lastGeneratedConfig?.textLayout || textLayout,
+        }
         // Navigate to Studio with the scene loaded
-        navigate(`/capstone`, { state: { sceneId: uploadResponse.scene_id } })
+        navigate(`/capstone`, { state: { sceneId, overlay: studioOverlay } })
       } else {
         setError('Failed to upload image to editor. Please try again.')
       }
@@ -343,6 +541,59 @@ export default function Generate() {
       }
     })
   }
+
+  const resolveInlineText = (field) => {
+    if (field === 'headline') {
+      if (typeof headline === 'string' && headline.trim()) return headline
+      if (typeof lastGeneratedConfig?.headline === 'string' && lastGeneratedConfig.headline.trim()) return lastGeneratedConfig.headline
+      if (typeof result?.headline === 'string') return result.headline
+      return ''
+    }
+
+    if (typeof bodyCopy === 'string' && bodyCopy.trim()) return bodyCopy
+    if (typeof lastGeneratedConfig?.bodyCopy === 'string' && lastGeneratedConfig.bodyCopy.trim()) return lastGeneratedConfig.bodyCopy
+    if (typeof result?.body_copy === 'string') return result.body_copy
+    return ''
+  }
+
+  const startInlineEdit = (field) => {
+    setEditingField(field)
+    setEditDraft(resolveInlineText(field))
+  }
+
+  const commitInlineEdit = () => {
+    if (!editingField) return
+
+    const nextText = editDraft
+    if (editingField === 'headline') {
+      setHeadline(nextText)
+      setResult(prev => (prev ? { ...prev, headline: nextText } : prev))
+      setLastGeneratedConfig(prev => (prev ? { ...prev, headline: nextText } : prev))
+    } else if (editingField === 'body') {
+      setBodyCopy(nextText)
+      setResult(prev => (prev ? { ...prev, body_copy: nextText } : prev))
+      setLastGeneratedConfig(prev => (prev ? { ...prev, bodyCopy: nextText } : prev))
+    }
+    setEditingField(null)
+    setEditDraft('')
+  }
+
+  const cancelInlineEdit = () => {
+    setEditingField(null)
+    setEditDraft('')
+  }
+
+  const effectiveTextColor = isValidHexColor(textColor) ? textColor : '#FFFFFF'
+  const generatedLayout = lastGeneratedConfig?.textLayout || textLayout
+  const inlineLayout = INLINE_LAYOUT_CONFIG[generatedLayout] || INLINE_LAYOUT_CONFIG.bottom_centered
+  const inlineHeadlineText = resolveInlineText('headline')
+  const inlineBodyText = resolveInlineText('body')
+  const hasGeneratedBody = Boolean(inlineBodyText)
+  const inlineFontId = lastGeneratedConfig?.fontId || fontId
+  const inlineTextStyle = lastGeneratedConfig?.textStyle || textStyle
+  const inlineTextColor = isValidHexColor(lastGeneratedConfig?.textColor)
+    ? lastGeneratedConfig.textColor
+    : effectiveTextColor
   
   if (loading) {
     return (
@@ -782,6 +1033,168 @@ export default function Generate() {
                 Image and text will be generated separately
               </p>
             )}
+          </div>
+        )}
+        
+        {/* Text Styling Options */}
+        {contentType !== 'image' && includeTextOverlay && (
+          <div className="border rounded-lg p-4 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 space-y-5">
+            <div>
+              <h3 className="font-semibold text-gray-900">Text Styling</h3>
+              <p className="text-xs text-gray-600 mt-1">Select fonts and styles from visual previews, then fine-tune limits and colors.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Font Library</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-72 overflow-auto pr-1">
+                {fontOptions.map((font) => (
+                  <button
+                    key={font.id}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => setFontId(font.id)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      fontId === font.id
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-gray-900">{font.name}</p>
+                    <p className="text-xs text-gray-500 mb-2">{font.description || 'Preview this font on your headline'}</p>
+                    <p
+                      className="text-lg leading-tight"
+                      style={{ fontFamily: getFontPreviewFamily(font.id) }}
+                    >
+                      Aa Brand Momentum
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Style Presets</label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {TEXT_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => setTextStyle(option.id)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      textStyle === option.id
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-gray-900">{option.name}</p>
+                    <p className="text-xs text-gray-500 mb-1">{option.preview}</p>
+                    <p
+                      className="text-sm"
+                      style={{
+                        color: isValidHexColor(textColor) ? textColor : '#FFFFFF',
+                        fontFamily: getFontPreviewFamily(fontId),
+                        ...getTextEffectStyle(option.id, isValidHexColor(textColor) ? textColor : '#FFFFFF'),
+                      }}
+                    >
+                      Styled preview
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Text Color</label>
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={isValidHexColor(textColor) ? textColor : '#FFFFFF'}
+                    onChange={(e) => setTextColor(e.target.value)}
+                    disabled={generating}
+                    className="h-10 w-12 border rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={textColor}
+                    onChange={(e) => setTextColor(e.target.value)}
+                    disabled={generating}
+                    placeholder="#FFFFFF"
+                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Style Preview</label>
+                <div className="h-10 px-3 rounded-lg border bg-gray-900 text-white flex items-center">
+                  <span
+                    style={{
+                      color: isValidHexColor(textColor) ? textColor : '#FFFFFF',
+                      fontFamily: getFontPreviewFamily(fontId),
+                      ...getTextEffectStyle(textStyle, isValidHexColor(textColor) ? textColor : '#FFFFFF'),
+                    }}
+                  >
+                    {headline || 'Your headline preview'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Headline Max Chars</label>
+                <input
+                  type="number"
+                  value={headlineMaxChars || ''}
+                  onChange={(e) => setHeadlineMaxChars(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  disabled={generating}
+                  placeholder="No limit"
+                  min="0"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Body Max Chars</label>
+                <input
+                  type="number"
+                  value={bodyMaxChars || ''}
+                  onChange={(e) => setBodyMaxChars(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  disabled={generating}
+                  placeholder="No limit"
+                  min="0"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Headline Max Lines</label>
+                <input
+                  type="number"
+                  value={headlineMaxLines || ''}
+                  onChange={(e) => setHeadlineMaxLines(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  disabled={generating}
+                  placeholder="Auto"
+                  min="0"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Body Max Lines</label>
+                <input
+                  type="number"
+                  value={bodyMaxLines || ''}
+                  onChange={(e) => setBodyMaxLines(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  disabled={generating}
+                  placeholder="Auto"
+                  min="0"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                />
+              </div>
+            </div>
           </div>
         )}
         
@@ -1316,56 +1729,175 @@ export default function Generate() {
             {/* Generated Image */}
             {result.image_url && (
               <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <Image className="w-5 h-5 text-primary-600" />
-                    Generated Image
-                  </h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={handleDownloadImage}
-                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download
-                    </button>
-                    <button
-                      onClick={handleEditInStudio}
-                      disabled={generating}
-                      className="text-sm bg-primary-600 text-white px-3 py-1 rounded-lg hover:bg-primary-700 flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {generating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Edit3 className="w-4 h-4" />
-                          Edit in Studio
-                        </>
-                      )}
-                    </button>
-                    {(result.headline || result.body_copy) && (
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Image className="w-5 h-5 text-primary-600" />
+                      Generated Image
+                    </h3>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
-                        onClick={handleCopyLinkedIn}
-                        className="px-3 py-1 bg-[#0077B5] text-white text-sm rounded-lg hover:bg-[#006396] flex items-center gap-2"
+                        onClick={handleDownloadImage}
+                        className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
                       >
-                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        {copied ? 'Copied!' : 'Copy Text'}
+                        <Download className="w-4 h-4" />
+                        Download
                       </button>
-                    )}
+                      <button
+                        onClick={handleEditInStudio}
+                        disabled={generating}
+                        className="text-sm bg-primary-600 text-white px-3 py-1 rounded-lg hover:bg-primary-700 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {generating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Edit3 className="w-4 h-4" />
+                            Edit in Studio
+                          </>
+                        )}
+                      </button>
+                      {(inlineHeadlineText || inlineBodyText) && (
+                        <button
+                          onClick={handleCopyLinkedIn}
+                          className="px-3 py-1 bg-[#0077B5] text-white text-sm rounded-lg hover:bg-[#006396] flex items-center gap-2"
+                        >
+                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied ? 'Copied!' : 'Copy Text'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="max-w-2xl mx-auto">
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border">
-                    <img 
-                      src={result.image_url}
-                      alt="Generated content"
-                      className="w-full h-full object-contain"
-                    />
+                  <div className="max-w-2xl mx-auto space-y-2">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border relative group">
+                      <img 
+                        src={result.image_url}
+                        alt="Generated content"
+                        className="w-full h-full object-contain"
+                      />
+
+                      {/* Inline Edit Mode - appears when clicking on text */}
+                      <div className={`absolute inset-0 p-4 md:p-8 flex ${inlineLayout.containerClass} pointer-events-none`}>
+                        <div className={`w-full ${inlineLayout.widthClass} space-y-2`}>
+                          {editingField === 'headline' ? (
+                            <textarea
+                              autoFocus
+                              value={editDraft}
+                              onChange={(e) => setEditDraft(e.target.value)}
+                              onBlur={commitInlineEdit}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  cancelInlineEdit()
+                                }
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  commitInlineEdit()
+                                }
+                              }}
+                              rows={2}
+                              className="w-full pointer-events-auto bg-transparent border-0 border-b-2 border-white/70 rounded-none px-0 py-0 text-3xl md:text-5xl font-bold leading-tight resize-none focus:outline-none focus:ring-0 focus:border-white"
+                              style={{
+                                color: inlineTextColor,
+                                textAlign: inlineLayout.textAlign,
+                                fontFamily: getFontPreviewFamily(inlineFontId),
+                                ...getTextEffectStyle(inlineTextStyle, inlineTextColor),
+                              }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startInlineEdit('headline')}
+                              className="w-full pointer-events-auto cursor-text border border-transparent rounded-md px-2 py-1 transition-all"
+                              aria-label="Edit headline text directly on image"
+                            >
+                              <span
+                                className="block text-3xl md:text-5xl font-bold leading-tight"
+                                style={{
+                                  color: inlineTextColor,
+                                  textAlign: inlineLayout.textAlign,
+                                  fontFamily: getFontPreviewFamily(inlineFontId),
+                                  ...getTextEffectStyle(inlineTextStyle, inlineTextColor),
+                                }}
+                              >
+                                {inlineHeadlineText || 'Click to add headline'}
+                              </span>
+                            </button>
+                          )}
+
+                          {(hasGeneratedBody || editingField === 'body') && (
+                            editingField === 'body' ? (
+                              <textarea
+                                autoFocus
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                onBlur={commitInlineEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    cancelInlineEdit()
+                                  }
+                                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                    commitInlineEdit()
+                                  }
+                                }}
+                                rows={2}
+                                  className="w-full pointer-events-auto bg-transparent border-0 border-b border-white/65 rounded-none px-0 py-0 text-lg md:text-2xl leading-snug resize-none focus:outline-none focus:ring-0 focus:border-white"
+                                style={{
+                                  color: inlineTextColor,
+                                  textAlign: inlineLayout.textAlign,
+                                  fontFamily: getFontPreviewFamily(inlineFontId),
+                                  ...getTextEffectStyle(inlineTextStyle, inlineTextColor),
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => startInlineEdit('body')}
+                                className="w-full pointer-events-auto cursor-text border border-transparent rounded-md px-2 py-1 transition-all"
+                                aria-label="Edit body text directly on image"
+                              >
+                                <span
+                                  className="block text-lg md:text-2xl leading-snug"
+                                  style={{
+                                    color: inlineTextColor,
+                                    textAlign: inlineLayout.textAlign,
+                                    fontFamily: getFontPreviewFamily(inlineFontId),
+                                    ...getTextEffectStyle(inlineTextStyle, inlineTextColor),
+                                  }}
+                                >
+                                  {inlineBodyText || 'Click to add body copy'}
+                                </span>
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-600">
+                      Click the text area directly on the image to edit. Press Ctrl+Enter to confirm and then click Generate again to export the updated render.
+                    </p>
+
+                    <div className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-800">Refine and Regenerate</p>
+                      <textarea
+                        value={refinementPrompt}
+                        onChange={(e) => setRefinementPrompt(e.target.value)}
+                        placeholder="Add refinements, e.g. make headline more premium, warmer lighting, stronger product focus..."
+                        className="w-full min-h-[74px] rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={generating}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRegenerateWithRefinements}
+                        disabled={generating || !refinementPrompt.trim()}
+                        className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Regenerate with Refinements
+                      </button>
+                    </div>
                   </div>
-                </div>
               </div>
             )}
           </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 import subprocess
 import tempfile
@@ -20,6 +21,9 @@ from app.capstone.runtime import (
     resolve_device,
 )
 from app.rendering.storage import fetch_image_bytes, put_bytes, save_pil
+
+
+logger = logging.getLogger(__name__)
 
 
 class SAM2UnavailableError(RuntimeError):
@@ -372,80 +376,89 @@ class SAM2ClickSegmenter:
 
         state = self.status()
         if sam_refine and bool(state["ready"]):
-            predictor = _sam2_predictor(
-                self.settings.sam2_config,
-                str(self.settings.resolved_sam2_checkpoint),
-                self.device,
-            )
+            # Try to initialize SAM predictor; if it fails, fall back to drawn mask
+            try:
+                predictor = _sam2_predictor(
+                    self.settings.sam2_config,
+                    str(self.settings.resolved_sam2_checkpoint),
+                    self.device,
+                )
+            except SAM2UnavailableError as pred_exc:
+                logger.warning(f"SAM2 predictor init failed, using drawn mask fallback: {pred_exc}")
+                method = "freehand_drawn_mask_sam_init_fallback"
+                masks = None
+                scores = None
+                predictor = None
 
-            if mode == "lasso":
-                point_coords = _mask_centroid_point(drawn_mask)
-            else:
-                point_coords = _sample_positive_points(drawn_mask, max_points=24)
-            if len(point_coords) > 0:
-                negative_coords = _sample_negative_points(drawn_mask, max_points=16)
-                if len(negative_coords) > 0:
-                    point_coords = np.concatenate([point_coords, negative_coords], axis=0)
-                    positive_labels = np.ones((point_coords.shape[0] - negative_coords.shape[0],), dtype=np.int32)
-                    negative_labels = np.zeros((negative_coords.shape[0],), dtype=np.int32)
-                    point_labels = np.concatenate([positive_labels, negative_labels], axis=0)
+            if predictor is not None:
+                if mode == "lasso":
+                    point_coords = _mask_centroid_point(drawn_mask)
                 else:
-                    point_labels = np.ones((point_coords.shape[0],), dtype=np.int32)
+                    point_coords = _sample_positive_points(drawn_mask, max_points=24)
+                if len(point_coords) > 0:
+                    negative_coords = _sample_negative_points(drawn_mask, max_points=16)
+                    if len(negative_coords) > 0:
+                        point_coords = np.concatenate([point_coords, negative_coords], axis=0)
+                        positive_labels = np.ones((point_coords.shape[0] - negative_coords.shape[0],), dtype=np.int32)
+                        negative_labels = np.zeros((negative_coords.shape[0],), dtype=np.int32)
+                        point_labels = np.concatenate([positive_labels, negative_labels], axis=0)
+                    else:
+                        point_labels = np.ones((point_coords.shape[0],), dtype=np.int32)
 
-                box = _mask_prompt_box(drawn_mask, w, h)
-                used_retry_fallback = False
-                with _sam2_predictor_lock:
-                    try:
-                        masks, scores, _ = _predict_with_set_image(
-                            predictor,
-                            arr,
-                            point_coords=point_coords,
-                            point_labels=point_labels,
-                            box=box,
-                            multimask_output=True,
-                        )
-                    except Exception as exc:
-                        if not (_is_sam2_torchvision_runtime_conflict(exc) or _is_sam2_image_state_error(exc)):
-                            raise
-
+                    box = _mask_prompt_box(drawn_mask, w, h)
+                    used_retry_fallback = False
+                    with _sam2_predictor_lock:
                         try:
-                            if mode == "lasso":
-                                retry_coords = _mask_centroid_point(drawn_mask)
-                            else:
-                                retry_coords = _sample_positive_points(drawn_mask, max_points=8)
-                            retry_labels = np.ones((retry_coords.shape[0],), dtype=np.int32)
                             masks, scores, _ = _predict_with_set_image(
                                 predictor,
                                 arr,
-                                point_coords=retry_coords,
-                                point_labels=retry_labels,
+                                point_coords=point_coords,
+                                point_labels=point_labels,
+                                box=box,
                                 multimask_output=True,
                             )
-                            used_retry_fallback = True
-                        except Exception as retry_exc:
-                            if not (_is_sam2_torchvision_runtime_conflict(retry_exc) or _is_sam2_image_state_error(retry_exc)):
+                        except Exception as exc:
+                            if not (_is_sam2_torchvision_runtime_conflict(exc) or _is_sam2_image_state_error(exc)):
                                 raise
-                            method = "freehand_drawn_mask_sam_fallback"
-                            masks = None
-                            scores = None
 
-                if masks is not None and scores is not None:
-                    best_idx = _pick_best_snap_mask(masks, scores, drawn_mask)
-                    sam_mask = (masks[best_idx] > 0).astype(np.uint8) * 255
-                    outside = float(np.count_nonzero((sam_mask > 0) & (drawn_mask == 0)))
-                    area = float(np.count_nonzero(sam_mask))
-                    if area > 0 and (outside / area) > 0.6:
-                        working_mask = np.where((sam_mask > 0) & (drawn_mask > 0), 255, 0).astype(np.uint8)
-                    else:
-                        working_mask = sam_mask
+                            try:
+                                if mode == "lasso":
+                                    retry_coords = _mask_centroid_point(drawn_mask)
+                                else:
+                                    retry_coords = _sample_positive_points(drawn_mask, max_points=8)
+                                retry_labels = np.ones((retry_coords.shape[0],), dtype=np.int32)
+                                masks, scores, _ = _predict_with_set_image(
+                                    predictor,
+                                    arr,
+                                    point_coords=retry_coords,
+                                    point_labels=retry_labels,
+                                    multimask_output=True,
+                                )
+                                used_retry_fallback = True
+                            except Exception as retry_exc:
+                                if not (_is_sam2_torchvision_runtime_conflict(retry_exc) or _is_sam2_image_state_error(retry_exc)):
+                                    raise
+                                method = "freehand_drawn_mask_sam_fallback"
+                                masks = None
+                                scores = None
 
-                    if used_retry_fallback:
-                        method = "sam2.1_auto_snap_retry" if mode == "lasso" else "sam2.1_auto_snap_brush_retry"
+                    if masks is not None and scores is not None:
+                        best_idx = _pick_best_snap_mask(masks, scores, drawn_mask)
+                        sam_mask = (masks[best_idx] > 0).astype(np.uint8) * 255
+                        outside = float(np.count_nonzero((sam_mask > 0) & (drawn_mask == 0)))
+                        area = float(np.count_nonzero(sam_mask))
+                        if area > 0 and (outside / area) > 0.6:
+                            working_mask = np.where((sam_mask > 0) & (drawn_mask > 0), 255, 0).astype(np.uint8)
+                        else:
+                            working_mask = sam_mask
+
+                        if used_retry_fallback:
+                            method = "sam2.1_auto_snap_retry" if mode == "lasso" else "sam2.1_auto_snap_brush_retry"
+                        else:
+                            method = "sam2.1_auto_snap_lasso" if mode == "lasso" else "sam2.1_auto_snap_brush"
+                        score = float(scores[best_idx])
                     else:
-                        method = "sam2.1_auto_snap_lasso" if mode == "lasso" else "sam2.1_auto_snap_brush"
-                    score = float(scores[best_idx])
-                else:
-                    method = "freehand_drawn_mask_sam_fallback"
+                        method = "freehand_drawn_mask_sam_fallback"
 
         refined = refine_mask(working_mask, tuning)
         area_fraction = float(np.count_nonzero(refined) / (w * h))
@@ -476,11 +489,22 @@ class SAM2ClickSegmenter:
 
 @lru_cache(maxsize=1)
 def _sam2_predictor(config_path: str, checkpoint_path: str, device: str):
-    from sam2.build_sam import build_sam2  # noqa: WPS433
-    from sam2.sam2_image_predictor import SAM2ImagePredictor  # noqa: WPS433
+    """
+    Build SAM2 predictor with error handling.
+    Raises SAM2UnavailableError on torchvision conflicts or other init failures.
+    """
+    try:
+        from sam2.build_sam import build_sam2  # noqa: WPS433
+        from sam2.sam2_image_predictor import SAM2ImagePredictor  # noqa: WPS433
 
-    model = build_sam2(config_path, checkpoint_path, device=device)
-    return SAM2ImagePredictor(model)
+        model = build_sam2(config_path, checkpoint_path, device=device)
+        return SAM2ImagePredictor(model)
+    except Exception as exc:
+        # If torchvision transform conflict, raise so caller can fallback gracefully
+        if _is_sam2_torchvision_runtime_conflict(exc):
+            raise SAM2UnavailableError(f"SAM2 torch/torchvision runtime conflict: {exc}") from exc
+        # Other model init failures should also be catchable
+        raise SAM2UnavailableError(f"Failed to initialize SAM2 predictor: {exc}") from exc
 
 
 @lru_cache(maxsize=1)
@@ -490,6 +514,30 @@ def _lama_predict_supports_refine(script_path: str) -> bool:
     except Exception:
         return False
     return "refine_predict" in text and "predict_config.get('refine'" in text
+
+
+def _append_reason(current_reason: str, new_reason: str) -> str:
+    if not current_reason:
+        return new_reason
+    return f"{current_reason} {new_reason}".strip()
+
+
+def _is_lama_cuda_runtime_failure(stdout_text: str, stderr_text: str) -> bool:
+    message = f"{stdout_text}\n{stderr_text}".lower()
+    signatures = (
+        "tdr",
+        "launch timed out",
+        "the launch timed out and was terminated",
+        "cuda error",
+        "cuda out of memory",
+        "unspecified launch failure",
+        "illegal memory access",
+        "device-side assert triggered",
+        "driver stopped responding",
+        "cudnn_status",
+        "cublas_status",
+    )
+    return any(signature in message for signature in signatures)
 
 
 class LaMaInpainter:
@@ -551,9 +599,18 @@ class LaMaInpainter:
         use_refine = refine_requested
         refine_skip_reason = ""
 
+        if use_refine and os.name == "nt" and not self.settings.lama_allow_windows_refine:
+            use_refine = False
+            refine_skip_reason = _append_reason(
+                refine_skip_reason,
+                "Skipped refinement on Windows to reduce GPU TDR crash risk. "
+                "Set CAPSTONE_LAMA_ALLOW_WINDOWS_REFINE=true to override.",
+            )
+
         if use_refine and mask_area_fraction > self.settings.lama_refiner_max_mask_area_fraction:
             use_refine = False
-            refine_skip_reason = (
+            refine_skip_reason = _append_reason(
+                refine_skip_reason,
                 "Skipped refinement because the mask covers too much area "
                 f"({mask_area_fraction:.3f} > {self.settings.lama_refiner_max_mask_area_fraction:.3f})."
             )
@@ -596,37 +653,39 @@ class LaMaInpainter:
             mask.save(mask_path, format="PNG")
 
             rel_model = Path(os.path.relpath(model, start=base)).as_posix()
-            command = [
-                self.settings.lama_python_executable,
-                str(script_path),
-                f"model.path={rel_model}",
-                "indir=input",
-                "outdir=output",
-                "dataset.img_suffix=.png",
-                f"device={device}",
-                "hydra.run.dir=.",
-                "hydra.output_subdir=null",
-            ]
-            if use_refine:
-                command.extend(
-                    [
-                        "refine=True",
-                        f"refiner.gpu_ids='{refine_gpu_ids}'",
-                        f"refiner.modulo={refine_modulo}",
-                        f"refiner.n_iters={refine_n_iters}",
-                        f"refiner.lr={refine_lr}",
-                        f"refiner.min_side={refine_min_side}",
-                        f"refiner.max_scales={refine_max_scales}",
-                        f"refiner.px_budget={refine_px_budget}",
-                    ]
-                )
-            refine_overrides = [
-                arg for arg in command if arg.startswith("refine=") or arg.startswith("refiner.")
-            ]
+            def build_command(target_device: str, enable_refine: bool) -> List[str]:
+                cmd = [
+                    self.settings.lama_python_executable,
+                    str(script_path),
+                    f"model.path={rel_model}",
+                    "indir=input",
+                    "outdir=output",
+                    "dataset.img_suffix=.png",
+                    f"device={target_device}",
+                    "hydra.run.dir=.",
+                    "hydra.output_subdir=null",
+                ]
+                if enable_refine:
+                    cmd.extend(
+                        [
+                            "refine=True",
+                            f"refiner.gpu_ids='{refine_gpu_ids}'",
+                            f"refiner.modulo={refine_modulo}",
+                            f"refiner.n_iters={refine_n_iters}",
+                            f"refiner.lr={refine_lr}",
+                            f"refiner.min_side={refine_min_side}",
+                            f"refiner.max_scales={refine_max_scales}",
+                            f"refiner.px_budget={refine_px_budget}",
+                        ]
+                    )
+                return cmd
+
             env = dict(os.environ)
             env["PYTHONPATH"] = str(repo) + (
                 os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
             )
+
+            command = build_command(device, use_refine)
             completed = subprocess.run(
                 command,
                 cwd=str(base),
@@ -635,13 +694,47 @@ class LaMaInpainter:
                 text=True,
                 check=False,
             )
+
+            device_used = device
+            fallback_reason = ""
             if completed.returncode != 0:
-                raise RuntimeError(
-                    "LaMa predict failed: "
-                    + "\n".join(
-                        line for line in [completed.stdout[-1000:], completed.stderr[-1000:]] if line
-                    )
+                should_retry_cpu = (
+                    device == "cuda"
+                    and self.settings.lama_retry_cpu_on_cuda_failure
+                    and _is_lama_cuda_runtime_failure(completed.stdout, completed.stderr)
                 )
+                if should_retry_cpu:
+                    logger.warning(
+                        "LaMa CUDA runtime failure detected; retrying on CPU. stderr tail: %s",
+                        completed.stderr[-300:],
+                    )
+                    fallback_reason = (
+                        "Detected CUDA runtime failure and retried on CPU to avoid driver/TDR crashes."
+                    )
+                    command = build_command("cpu", False)
+                    completed = subprocess.run(
+                        command,
+                        cwd=str(base),
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    device_used = "cpu"
+                    use_refine = False
+                    refine_skip_reason = _append_reason(refine_skip_reason, fallback_reason)
+
+                if completed.returncode != 0:
+                    raise RuntimeError(
+                        "LaMa predict failed: "
+                        + "\n".join(
+                            line for line in [completed.stdout[-1000:], completed.stderr[-1000:]] if line
+                        )
+                    )
+
+            refine_overrides = [
+                arg for arg in command if arg.startswith("refine=") or arg.startswith("refiner.")
+            ]
 
             result_path = outdir / "sample.png"
             if not result_path.exists():
@@ -662,6 +755,9 @@ class LaMaInpainter:
                 "refine_pipeline": "refine_predict" if use_refine else "predict",
                 "refine_overrides": refine_overrides,
                 "mask_area_fraction": round(mask_area_fraction, 6),
+                "device_requested": device,
+                "device_used": device_used,
+                "fallback_reason": fallback_reason,
                 "refiner": {
                     "gpu_ids": refine_gpu_ids,
                     "modulo": refine_modulo,
@@ -674,6 +770,7 @@ class LaMaInpainter:
                 if use_refine
                 else {},
                 "stdout_tail": completed.stdout[-500:],
+                "stderr_tail": completed.stderr[-500:],
                 "tuning": tuning.model_dump() if tuning else {},
             }
 

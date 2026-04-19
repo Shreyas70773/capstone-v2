@@ -37,6 +37,15 @@ class GenerateRequest(BaseModel):
     aspect_ratio: str = Field("1:1", description="1:1, 16:9, 9:16, 4:3")
     text_layout: str = Field("bottom_centered", description="Text placement: bottom_centered, top_centered, center_overlay, bottom_left")
     include_logo: bool = Field(False, description="Whether to add brand logo to image")
+    logo_position: str = Field("bottom_right", description="Logo placement: top_left, top_center, top_right, bottom_left, bottom_center, bottom_right")
+    font_id: Optional[str] = Field(None, description="Text overlay font ID (e.g., montserrat, playfair)")
+    text_style: str = Field("shadow", description="Text style: shadow, clean, outline, bold")
+    text_color: Optional[str] = Field(None, description="Optional text color hex (e.g., #FFFFFF)")
+    headline_max_chars: Optional[int] = Field(None, description="Max headline characters")
+    body_max_chars: Optional[int] = Field(None, description="Max body copy characters")
+    headline_max_lines: Optional[int] = Field(None, description="Max headline lines")
+    body_max_lines: Optional[int] = Field(None, description="Max body copy lines")
+    render_text_on_image: bool = Field(True, description="If false, return headline/body without compositing text into the image")
     use_reasoning: bool = Field(True, description="Enable LLM planning stage")
 
 
@@ -299,6 +308,15 @@ async def generate_content(brand_id: str, request: GenerateRequest):
         aspect_ratio=request.aspect_ratio,
         text_layout=request.text_layout,
         include_logo=request.include_logo,
+        logo_position=request.logo_position,
+        font_id=request.font_id,
+        text_style=request.text_style,
+        text_color=request.text_color,
+        headline_max_chars=request.headline_max_chars,
+        body_max_chars=request.body_max_chars,
+        headline_max_lines=request.headline_max_lines,
+        body_max_lines=request.body_max_lines,
+        render_text_on_image=request.render_text_on_image,
         use_reasoning=request.use_reasoning
     )
     
@@ -366,6 +384,17 @@ async def generate_content_stream(brand_id: str, request: GenerateRequest):
             product_id=request.product_id,
             character_id=request.character_id,
             aspect_ratio=request.aspect_ratio,
+            text_layout=request.text_layout,
+            include_logo=request.include_logo,
+            logo_position=request.logo_position,
+            font_id=request.font_id,
+            text_style=request.text_style,
+            text_color=request.text_color,
+            headline_max_chars=request.headline_max_chars,
+            body_max_chars=request.body_max_chars,
+            headline_max_lines=request.headline_max_lines,
+            body_max_lines=request.body_max_lines,
+            render_text_on_image=request.render_text_on_image,
             use_reasoning=request.use_reasoning
         )
         

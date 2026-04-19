@@ -240,6 +240,15 @@ class BrandDNAService:
         aspect_ratio: str = "1:1",
         text_layout: str = "bottom_centered",
         include_logo: bool = False,
+        logo_position: str = "bottom_right",
+        font_id: Optional[str] = None,
+        text_style: str = "shadow",
+        text_color: Optional[str] = None,
+        headline_max_chars: Optional[int] = None,
+        body_max_chars: Optional[int] = None,
+        headline_max_lines: Optional[int] = None,
+        body_max_lines: Optional[int] = None,
+        render_text_on_image: bool = True,
         use_reasoning: bool = True
     ) -> Dict[str, Any]:
         """
@@ -474,12 +483,14 @@ class BrandDNAService:
         if not result.success:
             pipeline_steps[-1]["error"] = result.error_message
         
-        # Step 5.5: Apply text overlay using PIL (if headline or body_copy requested)
+        # Step 5.5: Apply text/logo post-processing.
         current_image_bytes = None
         print(f"[DEBUG] Post-processing check: headline={headline}, body_copy={body_copy}, include_logo={include_logo}")
         print(f"[DEBUG] Brand DNA logo_url: {brand_dna.logo_url}")
         
-        if result.success and (headline or body_copy or include_logo):
+        should_render_text = render_text_on_image and bool(headline or body_copy)
+
+        if result.success and (should_render_text or include_logo):
             # Download the generated image first (or decode if base64)
             pipeline_steps.append({
                 "step": "post_processing",
@@ -508,13 +519,23 @@ class BrandDNAService:
                         current_image_bytes = img_response.content
                         print(f"[DEBUG] Fetched image, size: {len(current_image_bytes)} bytes")
                 
-                # Apply text overlay if headline or body_copy
-                if headline or body_copy:
+                # Apply text overlay only when explicitly requested.
+                if should_render_text:
                     print(f"[DEBUG] Applying text overlay: headline='{headline}', body_copy='{body_copy}'")
+                    # Truncate text if max lengths specified
+                    if headline and headline_max_chars:
+                        headline = headline[:headline_max_chars]
+                    if body_copy and body_max_chars:
+                        body_copy = body_copy[:body_max_chars]
+                    
                     # Build brand context for text styling
                     brand_context = {
-                        "font_id": brand_condition.font_id if hasattr(brand_condition, 'font_id') else "montserrat",
-                        "colors": brand_dna.colors
+                        "font_id": font_id or getattr(brand_condition, 'font_id', "montserrat"),
+                        "colors": brand_dna.colors,
+                        "text_style": text_style,
+                        "text_color": text_color,
+                        "headline_max_lines": headline_max_lines,
+                        "body_max_lines": body_max_lines
                     }
                     
                     # Composite text onto image using PIL
@@ -526,6 +547,8 @@ class BrandDNAService:
                         layout=text_layout
                     )
                     pipeline_steps[-1]["text_added"] = True
+                else:
+                    pipeline_steps[-1]["text_added"] = False
                 
                 # Apply logo if requested and logo exists
                 print(f"[DEBUG] Logo check: include_logo={include_logo}, logo_url={brand_dna.logo_url}")
@@ -537,16 +560,17 @@ class BrandDNAService:
                             logo_response.raise_for_status()
                             logo_bytes = logo_response.content
                         
-                        print(f"[DEBUG] Logo fetched, size: {len(logo_bytes)} bytes")
+                        print(f"[DEBUG] Logo fetched, size: {len(logo_bytes)} bytes, position: {logo_position}")
                         current_image_bytes = add_logo_to_image(
                             image_bytes=current_image_bytes,
                             logo_bytes=logo_bytes,
-                            position="bottom_right",
+                            position=logo_position,
                             scale=0.12,
                             opacity=0.85
                         )
-                        print(f"[DEBUG] Logo added successfully")
+                        print(f"[DEBUG] Logo added successfully at {logo_position}")
                         pipeline_steps[-1]["logo_added"] = True
+                        pipeline_steps[-1]["logo_position"] = logo_position
                     except Exception as e:
                         print(f"[DEBUG] Logo error: {str(e)}")
                         pipeline_steps[-1]["logo_error"] = str(e)

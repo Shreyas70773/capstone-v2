@@ -9,9 +9,11 @@ import {
   Eye,
   ImagePlus,
   Loader2,
+  Move,
   PenLine,
   ScanSearch,
   Sparkles,
+  Type,
   Wand2,
   XCircle,
 } from 'lucide-react'
@@ -35,19 +37,296 @@ function distanceSquared(a, b) {
   return dx * dx + dy * dy
 }
 
-const REFINEMENT_PROFILES = {
-  soft: {
-    mask_dilate_px: 2,
-    refine_n_iters: 6,
-    refine_lr: 0.001,
-    refine_max_scales: 2,
-    refine_px_budget: 1200000,
+const STUDIO_FONT_OPTIONS = [
+  'montserrat',
+  'playfair',
+  'roboto',
+  'poppins',
+  'oswald',
+  'lora',
+  'raleway',
+  'bebas',
+]
+
+const STUDIO_TEXT_STYLE_OPTIONS = ['shadow', 'clean', 'outline', 'bold', 'glow', 'cinematic']
+
+const FONT_PREVIEW_FAMILY = {
+  montserrat: 'Montserrat, Arial, sans-serif',
+  playfair: 'Playfair Display, Georgia, serif',
+  roboto: 'Roboto, Arial, sans-serif',
+  poppins: 'Poppins, Arial, sans-serif',
+  oswald: 'Oswald, Impact, sans-serif',
+  lora: 'Lora, Georgia, serif',
+  raleway: 'Raleway, Arial, sans-serif',
+  bebas: 'Bebas Neue, Impact, sans-serif',
+}
+
+const STUDIO_LAYOUT_CONFIG = {
+  bottom_centered: {
+    textAlign: 'center',
+    widthRatio: 0.88,
+    canvasAlign: 'center',
+    xRatio: 0.5,
+    yRatio: 0.8,
   },
+  top_centered: {
+    textAlign: 'center',
+    widthRatio: 0.88,
+    canvasAlign: 'center',
+    xRatio: 0.5,
+    yRatio: 0.2,
+  },
+  center_overlay: {
+    textAlign: 'center',
+    widthRatio: 0.82,
+    canvasAlign: 'center',
+    xRatio: 0.5,
+    yRatio: 0.52,
+  },
+  bottom_left: {
+    textAlign: 'left',
+    widthRatio: 0.72,
+    canvasAlign: 'left',
+    xRatio: 0.08,
+    yRatio: 0.8,
+  },
+}
+
+const STUDIO_BODY_OFFSET_Y = 0.12
+
+function toFiniteNumber(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function resolveOverlayPosition(position, layoutKey) {
+  const layout = STUDIO_LAYOUT_CONFIG[layoutKey] || STUDIO_LAYOUT_CONFIG.bottom_centered
+  const x = toFiniteNumber(position?.x)
+  const y = toFiniteNumber(position?.y)
+  return {
+    x: clamp01(x ?? layout.xRatio),
+    y: clamp01(y ?? layout.yRatio),
+  }
+}
+
+function resolveBodyOverlayPosition(position, layoutKey, anchorPosition = null) {
+  const explicitX = toFiniteNumber(position?.x)
+  const explicitY = toFiniteNumber(position?.y)
+  if (explicitX !== null || explicitY !== null) {
+    return resolveOverlayPosition(position, layoutKey)
+  }
+
+  const anchor = anchorPosition || resolveOverlayPosition(null, layoutKey)
+  return {
+    x: anchor.x,
+    y: clamp01(anchor.y + STUDIO_BODY_OFFSET_Y),
+  }
+}
+
+function getFontPreviewFamily(fontId) {
+  return FONT_PREVIEW_FAMILY[fontId] || 'Arial, sans-serif'
+}
+
+function isValidHexColor(value) {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test((value || '').trim())
+}
+
+function getTextEffectStyle(style, color = '#FFFFFF') {
+  if (style === 'clean') {
+    return { textShadow: 'none', fontWeight: 700 }
+  }
+
+  if (style === 'outline') {
+    return {
+      WebkitTextStroke: '1.2px rgba(0,0,0,0.75)',
+      textShadow: '0 0 2px rgba(0,0,0,0.55)',
+      fontWeight: 700,
+    }
+  }
+
+  if (style === 'bold') {
+    return {
+      fontWeight: 900,
+      textShadow: '0 2px 6px rgba(0,0,0,0.45)',
+      letterSpacing: '0.02em',
+    }
+  }
+
+  if (style === 'glow') {
+    return {
+      fontWeight: 700,
+      textShadow: `0 0 6px ${color}, 0 0 14px ${color}, 0 2px 10px rgba(0,0,0,0.45)`,
+    }
+  }
+
+  if (style === 'cinematic') {
+    return {
+      fontWeight: 800,
+      letterSpacing: '0.04em',
+      textTransform: 'uppercase',
+      textShadow: '0 3px 10px rgba(0,0,0,0.7)',
+    }
+  }
+
+  return {
+    fontWeight: 700,
+    textShadow: '0 3px 8px rgba(0,0,0,0.75)',
+  }
+}
+
+function parseWeight(style) {
+  if (style === 'bold') return 900
+  if (style === 'cinematic') return 800
+  return 700
+}
+
+function wrapCanvasText(ctx, text, maxWidth) {
+  const words = String(text || '').split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+
+  const lines = []
+  let line = words[0]
+  for (let i = 1; i < words.length; i += 1) {
+    const candidate = `${line} ${words[i]}`
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      line = candidate
+    } else {
+      lines.push(line)
+      line = words[i]
+    }
+  }
+  lines.push(line)
+  return lines
+}
+
+function drawCanvasOverlayTextBlock(ctx, config) {
+  const {
+    text,
+    x,
+    anchorY,
+    maxWidth,
+    fontWeight,
+    fontSize,
+    fontFamily,
+    textStyle,
+    height,
+  } = config
+
+  const normalizedText = textStyle === 'cinematic' ? String(text || '').toUpperCase() : String(text || '')
+  if (!normalizedText.trim()) {
+    return
+  }
+
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+  const lines = wrapCanvasText(ctx, normalizedText, maxWidth)
+  const lineHeight = Math.round(fontSize * 1.2)
+  const blockHeight = lines.length * lineHeight
+  let y = Math.round(anchorY - blockHeight * 0.45)
+  y = Math.max(lineHeight, Math.min(height - Math.round(lineHeight * 0.2), y))
+
+  lines.forEach((line) => {
+    if (textStyle === 'outline') {
+      ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.06))
+      ctx.strokeText(line, x, y)
+    }
+    ctx.fillText(line, x, y)
+    y += lineHeight
+  })
+}
+
+function drawStudioOverlayOnCanvas(ctx, width, height, overlayConfig) {
+  const {
+    headline,
+    body,
+    fontId,
+    textStyle,
+    textColor,
+    textLayout,
+    headlinePosition,
+    bodyPosition,
+    position,
+  } = overlayConfig
+
+  const safeColor = isValidHexColor(textColor) ? textColor : '#FFFFFF'
+  const layout = STUDIO_LAYOUT_CONFIG[textLayout] || STUDIO_LAYOUT_CONFIG.bottom_centered
+  const resolvedHeadlinePosition = resolveOverlayPosition(
+    headlinePosition || position,
+    textLayout
+  )
+  const resolvedBodyPosition = resolveBodyOverlayPosition(
+    bodyPosition,
+    textLayout,
+    resolvedHeadlinePosition
+  )
+  const maxWidth = width * (layout.widthRatio || 0.84)
+  const headlineX = width * resolvedHeadlinePosition.x
+  const headlineY = height * resolvedHeadlinePosition.y
+  const bodyX = width * resolvedBodyPosition.x
+  const bodyY = height * resolvedBodyPosition.y
+  const align = layout.canvasAlign
+
+  ctx.save()
+  ctx.textAlign = align
+  ctx.fillStyle = safeColor
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)'
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+
+  const shadowColor = textStyle === 'glow' ? safeColor : 'rgba(0,0,0,0.65)'
+  const shadowBlur = textStyle === 'clean' ? 0 : (textStyle === 'glow' ? 16 : 8)
+  ctx.shadowColor = shadowColor
+  ctx.shadowBlur = shadowBlur
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 2
+
+  const fontFamily = getFontPreviewFamily(fontId)
+  const headlineSize = Math.max(34, Math.round(width * 0.06))
+  const bodySize = Math.max(20, Math.round(width * 0.034))
+  const headlineWeight = parseWeight(textStyle)
+  const bodyWeight = textStyle === 'bold' ? 800 : 600
+
+  drawCanvasOverlayTextBlock(ctx, {
+    text: headline,
+    x: headlineX,
+    anchorY: headlineY,
+    maxWidth,
+    fontWeight: headlineWeight,
+    fontSize: headlineSize,
+    fontFamily,
+    textStyle,
+    height,
+  })
+
+  drawCanvasOverlayTextBlock(ctx, {
+    text: body,
+    x: bodyX,
+    anchorY: bodyY,
+    maxWidth,
+    fontWeight: bodyWeight,
+    fontSize: bodySize,
+    fontFamily,
+    textStyle,
+    height,
+  })
+
+  ctx.restore()
 }
 
 export default function CapstoneStudio() {
   const location = useLocation()
   const imageRef = useRef(null)
+  const overlayDragStateRef = useRef(null)
+  const initialOverlay = location.state?.overlay || {}
+  const initialOverlayLayout = initialOverlay.textLayout || 'bottom_centered'
+  const initialHeadlineOverlayPosition = resolveOverlayPosition(
+    initialOverlay.headlinePosition || initialOverlay.position,
+    initialOverlayLayout
+  )
+  const initialBodyOverlayPosition = resolveBodyOverlayPosition(
+    initialOverlay.bodyPosition,
+    initialOverlayLayout,
+    initialHeadlineOverlayPosition
+  )
   const [capabilities, setCapabilities] = useState(null)
   const [presets, setPresets] = useState(null)
   const [scene, setScene] = useState(null)
@@ -65,6 +344,20 @@ export default function CapstoneStudio() {
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [textOverlayEnabled, setTextOverlayEnabled] = useState(
+    Boolean(initialOverlay.headline || initialOverlay.bodyCopy)
+  )
+  const [overlayHeadline, setOverlayHeadline] = useState(initialOverlay.headline || '')
+  const [overlayBody, setOverlayBody] = useState(initialOverlay.bodyCopy || '')
+  const [overlayFontId, setOverlayFontId] = useState(initialOverlay.fontId || 'montserrat')
+  const [overlayTextStyle, setOverlayTextStyle] = useState(initialOverlay.textStyle || 'shadow')
+  const [overlayTextColor, setOverlayTextColor] = useState(initialOverlay.textColor || '#FFFFFF')
+  const [overlayTextLayout, setOverlayTextLayout] = useState(initialOverlayLayout)
+  const [overlayHeadlinePosition, setOverlayHeadlinePosition] = useState(initialHeadlineOverlayPosition)
+  const [overlayBodyPosition, setOverlayBodyPosition] = useState(initialBodyOverlayPosition)
+  const [draggingOverlayField, setDraggingOverlayField] = useState(null)
+  const [overlayEditingField, setOverlayEditingField] = useState(null)
+  const [overlayDraft, setOverlayDraft] = useState('')
 
   useEffect(() => {
     async function loadBootData() {
@@ -81,12 +374,33 @@ export default function CapstoneStudio() {
           const scene = await getCapstoneScene(location.state.sceneId)
           setScene(scene)
         }
+
+        if (location.state?.overlay) {
+          const overlay = location.state.overlay
+          const nextLayout = overlay.textLayout || 'bottom_centered'
+          const nextHeadlinePosition = resolveOverlayPosition(
+            overlay.headlinePosition || overlay.position,
+            nextLayout
+          )
+
+          setTextOverlayEnabled(Boolean(overlay.headline || overlay.bodyCopy))
+          setOverlayHeadline(overlay.headline || '')
+          setOverlayBody(overlay.bodyCopy || '')
+          setOverlayFontId(overlay.fontId || 'montserrat')
+          setOverlayTextStyle(overlay.textStyle || 'shadow')
+          setOverlayTextColor(overlay.textColor || '#FFFFFF')
+          setOverlayTextLayout(nextLayout)
+          setOverlayHeadlinePosition(nextHeadlinePosition)
+          setOverlayBodyPosition(
+            resolveBodyOverlayPosition(overlay.bodyPosition, nextLayout, nextHeadlinePosition)
+          )
+        }
       } catch (err) {
         setError(err.message)
       }
     }
     loadBootData()
-  }, [])
+  }, [location.state?.sceneId, location.state?.overlay])
 
   const imageUrl = scene?.scene?.image_path
   const objects = scene?.objects || []
@@ -110,15 +424,21 @@ export default function CapstoneStudio() {
   const selectedSegmentationPreset = presets?.segmentation?.[segmentPresetKey] || {}
   const selectedInpaintPreset = presets?.inpainting?.[inpaintPresetKey] || {}
   const refineSupported = Boolean(capabilities?.lama?.refine_supported)
-  const softRefinementProfile = REFINEMENT_PROFILES.soft
-  const effectiveInpaintTuning = useMemo(
-    () => ({
+  const studioInlineLayout = STUDIO_LAYOUT_CONFIG[overlayTextLayout] || STUDIO_LAYOUT_CONFIG.bottom_centered
+  const studioInlineColor = isValidHexColor(overlayTextColor) ? overlayTextColor : '#FFFFFF'
+  const hasStudioBody = Boolean((overlayBody || '').trim())
+  const effectiveInpaintTuning = useMemo(() => {
+    if (!selectedInpaintPreset || Object.keys(selectedInpaintPreset).length === 0) {
+      return {}
+    }
+    if (refineSupported) {
+      return { ...selectedInpaintPreset }
+    }
+    return {
       ...selectedInpaintPreset,
-      ...softRefinementProfile,
-      enable_refinement: refineSupported,
-    }),
-    [selectedInpaintPreset, softRefinementProfile, refineSupported]
-  )
+      enable_refinement: false,
+    }
+  }, [selectedInpaintPreset, refineSupported])
 
   async function refreshScene(sceneId) {
     const fresh = await getCapstoneScene(sceneId)
@@ -298,6 +618,87 @@ export default function CapstoneStudio() {
     await applyFreehandPaths(paths, 'manual')
   }
 
+  function startOverlayInlineEdit(field) {
+    setOverlayEditingField(field)
+    setOverlayDraft(field === 'headline' ? overlayHeadline : overlayBody)
+  }
+
+  function handleOverlayLayoutChange(nextLayout) {
+    setOverlayTextLayout(nextLayout)
+    const nextHeadlinePosition = resolveOverlayPosition(null, nextLayout)
+    setOverlayHeadlinePosition(nextHeadlinePosition)
+    setOverlayBodyPosition(resolveBodyOverlayPosition(null, nextLayout, nextHeadlinePosition))
+  }
+
+  function handleOverlayDragPointerDown(event, field) {
+    const rect = imageRef.current?.getBoundingClientRect()
+    if (!rect || !rect.width || !rect.height) return
+
+    const anchor = field === 'body' ? overlayBodyPosition : overlayHeadlinePosition
+
+    const anchorX = rect.left + anchor.x * rect.width
+    const anchorY = rect.top + anchor.y * rect.height
+
+    overlayDragStateRef.current = {
+      field,
+      pointerId: event.pointerId,
+      rect,
+      offsetX: event.clientX - anchorX,
+      offsetY: event.clientY - anchorY,
+    }
+
+    setDraggingOverlayField(field)
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  function handleOverlayDragPointerMove(event) {
+    const dragState = overlayDragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    const x = clamp01((event.clientX - dragState.offsetX - dragState.rect.left) / dragState.rect.width)
+    const y = clamp01((event.clientY - dragState.offsetY - dragState.rect.top) / dragState.rect.height)
+    if (dragState.field === 'body') {
+      setOverlayBodyPosition({ x, y })
+    } else {
+      setOverlayHeadlinePosition({ x, y })
+    }
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  function handleOverlayDragPointerUp(event) {
+    const dragState = overlayDragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    overlayDragStateRef.current = null
+    setDraggingOverlayField(null)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  function commitOverlayInlineEdit() {
+    if (!overlayEditingField) return
+    if (overlayEditingField === 'headline') {
+      setOverlayHeadline(overlayDraft)
+    } else {
+      setOverlayBody(overlayDraft)
+    }
+    setOverlayEditingField(null)
+    setOverlayDraft('')
+  }
+
+  function cancelOverlayInlineEdit() {
+    setOverlayEditingField(null)
+    setOverlayDraft('')
+  }
+
   async function handleRemoveObject() {
     if (!scene?.scene?.scene_id || !removalTargetObject) return
     setBusy('remove')
@@ -319,7 +720,7 @@ export default function CapstoneStudio() {
         refinePipeline: result.refine_pipeline || 'predict',
         refineOverrides: result.refine_overrides || [],
         maskAreaFraction: result.mask_area_fraction,
-        profile: 'soft',
+        profile: inpaintPresetKey,
         refiner,
       })
       const skipSuffix = result.refine_skip_reason ? ` ${result.refine_skip_reason}` : ''
@@ -355,9 +756,53 @@ export default function CapstoneStudio() {
         throw new Error(`Download failed with status ${response.status}`)
       }
       const blob = await response.blob()
-      const ext = blob.type.includes('jpeg') ? 'jpg' : 'png'
+      let exportBlob = blob
+      let ext = blob.type.includes('jpeg') ? 'jpg' : 'png'
+
+      if (textOverlayEnabled && ((overlayHeadline || '').trim() || (overlayBody || '').trim())) {
+        const imageObjectUrl = window.URL.createObjectURL(blob)
+        try {
+          const imageElement = await new Promise((resolve, reject) => {
+            const img = new window.Image()
+            img.onload = () => resolve(img)
+            img.onerror = () => reject(new Error('Failed to render image for text overlay export'))
+            img.src = imageObjectUrl
+          })
+
+          const canvas = document.createElement('canvas')
+          canvas.width = imageElement.naturalWidth || imageElement.width
+          canvas.height = imageElement.naturalHeight || imageElement.height
+          const ctx = canvas.getContext('2d')
+
+          if (ctx) {
+            ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height)
+            drawStudioOverlayOnCanvas(ctx, canvas.width, canvas.height, {
+              headline: overlayHeadline,
+              body: overlayBody,
+              fontId: overlayFontId,
+              textStyle: overlayTextStyle,
+              textColor: studioInlineColor,
+              textLayout: overlayTextLayout,
+              headlinePosition: overlayHeadlinePosition,
+              bodyPosition: overlayBodyPosition,
+            })
+
+            const compositedBlob = await new Promise((resolve) => {
+              canvas.toBlob((value) => resolve(value), 'image/png')
+            })
+
+            if (compositedBlob) {
+              exportBlob = compositedBlob
+              ext = 'png'
+            }
+          }
+        } finally {
+          window.URL.revokeObjectURL(imageObjectUrl)
+        }
+      }
+
       const sceneId = scene?.scene?.scene_id || 'scene'
-      const href = window.URL.createObjectURL(blob)
+      const href = window.URL.createObjectURL(exportBlob)
       const link = document.createElement('a')
       link.href = href
       link.download = `${sceneId}-canvas.${ext}`
@@ -365,7 +810,11 @@ export default function CapstoneStudio() {
       link.click()
       link.remove()
       window.URL.revokeObjectURL(href)
-      setMessage('Downloaded current canvas image.')
+      setMessage(
+        textOverlayEnabled && ((overlayHeadline || '').trim() || (overlayBody || '').trim())
+          ? 'Downloaded current canvas image with text overlay edits.'
+          : 'Downloaded current canvas image.'
+      )
     } catch (err) {
       setError(err.message || 'Failed to download image')
     } finally {
@@ -520,6 +969,173 @@ export default function CapstoneStudio() {
                     onSelect={() => handleSelectObject(item.object_id)}
                   />
                 ))}
+                {textOverlayEnabled ? (
+                  <div className="absolute inset-0 z-10 pointer-events-none">
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: `${(overlayHeadlinePosition.x * 100).toFixed(2)}%`,
+                        top: `${(overlayHeadlinePosition.y * 100).toFixed(2)}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: `${Math.round((studioInlineLayout.widthRatio || 0.84) * 100)}%`,
+                      }}
+                    >
+                      <div className="mb-2 flex justify-end">
+                        <button
+                          type="button"
+                          onPointerDown={(event) => handleOverlayDragPointerDown(event, 'headline')}
+                          onPointerMove={handleOverlayDragPointerMove}
+                          onPointerUp={handleOverlayDragPointerUp}
+                          onPointerCancel={handleOverlayDragPointerUp}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                          }}
+                          className={`inline-flex pointer-events-auto items-center gap-1 rounded-full border border-white/80 bg-black/55 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white backdrop-blur-sm transition ${
+                            draggingOverlayField === 'headline' ? 'cursor-grabbing' : 'cursor-grab hover:bg-black/65'
+                          }`}
+                          aria-label="Drag headline"
+                          title="Drag headline"
+                        >
+                          <Move className="h-3.5 w-3.5" />
+                          Drag headline
+                        </button>
+                      </div>
+
+                      {overlayEditingField === 'headline' ? (
+                        <textarea
+                          autoFocus
+                          value={overlayDraft}
+                          onChange={(event) => setOverlayDraft(event.target.value)}
+                          onBlur={commitOverlayInlineEdit}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => {
+                            event.stopPropagation()
+                            if (event.key === 'Escape') {
+                              cancelOverlayInlineEdit()
+                            }
+                            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                              commitOverlayInlineEdit()
+                            }
+                          }}
+                          rows={2}
+                          className="w-full pointer-events-auto bg-transparent border-0 border-b-2 border-white/70 rounded-none px-0 py-0 text-3xl md:text-5xl font-bold leading-tight resize-none focus:outline-none focus:ring-0 focus:border-white"
+                          style={{
+                            color: studioInlineColor,
+                            textAlign: studioInlineLayout.textAlign,
+                            fontFamily: getFontPreviewFamily(overlayFontId),
+                            ...getTextEffectStyle(overlayTextStyle, studioInlineColor),
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            startOverlayInlineEdit('headline')
+                          }}
+                          className="w-full pointer-events-auto cursor-text border border-transparent rounded-md px-2 py-1 transition-all"
+                          aria-label="Edit headline text on canvas"
+                        >
+                          <span
+                            className="block text-3xl md:text-5xl font-bold leading-tight"
+                            style={{
+                              color: studioInlineColor,
+                              textAlign: studioInlineLayout.textAlign,
+                              fontFamily: getFontPreviewFamily(overlayFontId),
+                              ...getTextEffectStyle(overlayTextStyle, studioInlineColor),
+                            }}
+                          >
+                            {overlayHeadline || 'Click to add headline'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {(hasStudioBody || overlayEditingField === 'body') ? (
+                      <div
+                        className="absolute pointer-events-none"
+                        style={{
+                          left: `${(overlayBodyPosition.x * 100).toFixed(2)}%`,
+                          top: `${(overlayBodyPosition.y * 100).toFixed(2)}%`,
+                          transform: 'translate(-50%, -50%)',
+                          width: `${Math.round((studioInlineLayout.widthRatio || 0.84) * 100)}%`,
+                        }}
+                      >
+                        <div className="mb-2 flex justify-end">
+                          <button
+                            type="button"
+                            onPointerDown={(event) => handleOverlayDragPointerDown(event, 'body')}
+                            onPointerMove={handleOverlayDragPointerMove}
+                            onPointerUp={handleOverlayDragPointerUp}
+                            onPointerCancel={handleOverlayDragPointerUp}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                            }}
+                            className={`inline-flex pointer-events-auto items-center gap-1 rounded-full border border-white/80 bg-black/55 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white backdrop-blur-sm transition ${
+                              draggingOverlayField === 'body' ? 'cursor-grabbing' : 'cursor-grab hover:bg-black/65'
+                            }`}
+                            aria-label="Drag subtext"
+                            title="Drag subtext"
+                          >
+                            <Move className="h-3.5 w-3.5" />
+                            Drag subtext
+                          </button>
+                        </div>
+
+                        {overlayEditingField === 'body' ? (
+                          <textarea
+                            autoFocus
+                            value={overlayDraft}
+                            onChange={(event) => setOverlayDraft(event.target.value)}
+                            onBlur={commitOverlayInlineEdit}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                              event.stopPropagation()
+                              if (event.key === 'Escape') {
+                                cancelOverlayInlineEdit()
+                              }
+                              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                                commitOverlayInlineEdit()
+                              }
+                            }}
+                            rows={2}
+                            className="w-full pointer-events-auto bg-transparent border-0 border-b border-white/65 rounded-none px-0 py-0 text-lg md:text-2xl leading-snug resize-none focus:outline-none focus:ring-0 focus:border-white"
+                            style={{
+                              color: studioInlineColor,
+                              textAlign: studioInlineLayout.textAlign,
+                              fontFamily: getFontPreviewFamily(overlayFontId),
+                              ...getTextEffectStyle(overlayTextStyle, studioInlineColor),
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              startOverlayInlineEdit('body')
+                            }}
+                            className="w-full pointer-events-auto cursor-text border border-transparent rounded-md px-2 py-1 transition-all"
+                            aria-label="Edit body text on canvas"
+                          >
+                            <span
+                              className="block text-lg md:text-2xl leading-snug"
+                              style={{
+                                color: studioInlineColor,
+                                textAlign: studioInlineLayout.textAlign,
+                                fontFamily: getFontPreviewFamily(overlayFontId),
+                                ...getTextEffectStyle(overlayTextStyle, studioInlineColor),
+                              }}
+                            >
+                              {overlayBody || 'Click to add body copy'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {selectionMode === 'freehand' ? (
                   <div
                     className="absolute inset-0 z-20"
@@ -576,6 +1192,143 @@ export default function CapstoneStudio() {
         </div>
 
         <div className="space-y-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Type className="h-4 w-4 text-slate-700" />
+                <h2 className="text-lg font-semibold text-slate-900">Text Overlay Editor</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTextOverlayEnabled((value) => !value)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  textOverlayEnabled ? 'bg-cyan-500' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    textOverlayEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {textOverlayEnabled ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Click headline/body directly on the canvas to edit text, then use Drag headline and Drag subtext handles for independent placement.
+                </p>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Headline</label>
+                  <input
+                    type="text"
+                    value={overlayHeadline}
+                    onChange={(event) => setOverlayHeadline(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="Enter headline"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Body</label>
+                  <input
+                    type="text"
+                    value={overlayBody}
+                    onChange={(event) => setOverlayBody(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="Optional body text"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Font</label>
+                    <select
+                      value={overlayFontId}
+                      onChange={(event) => setOverlayFontId(event.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700"
+                    >
+                      {STUDIO_FONT_OPTIONS.map((font) => (
+                        <option key={font} value={font}>
+                          {font}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Style</label>
+                    <select
+                      value={overlayTextStyle}
+                      onChange={(event) => setOverlayTextStyle(event.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700"
+                    >
+                      {STUDIO_TEXT_STYLE_OPTIONS.map((style) => (
+                        <option key={style} value={style}>
+                          {style}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Text Color</label>
+                    <input
+                      type="color"
+                      value={studioInlineColor}
+                      onChange={(event) => setOverlayTextColor(event.target.value)}
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Alignment Preset</label>
+                    <select
+                      value={overlayTextLayout}
+                      onChange={(event) => handleOverlayLayoutChange(event.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700"
+                    >
+                      {Object.keys(STUDIO_LAYOUT_CONFIG).map((layout) => (
+                        <option key={layout} value={layout}>
+                          {layout}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="space-y-1 text-xs text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span>Headline</span>
+                      <span>
+                        x {Math.round(overlayHeadlinePosition.x * 100)}% · y {Math.round(overlayHeadlinePosition.y * 100)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Subtext</span>
+                      <span>
+                        x {Math.round(overlayBodyPosition.x * 100)}% · y {Math.round(overlayBodyPosition.y * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOverlayLayoutChange(overlayTextLayout)}
+                    className="mt-2 rounded-lg bg-white px-2 py-1 text-xs font-medium text-slate-700 border border-slate-200 hover:bg-slate-100"
+                  >
+                    Reset to preset position
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Enable text overlay editing for on-canvas headline/body updates.</p>
+            )}
+          </div>
+
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>

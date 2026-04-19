@@ -12,19 +12,19 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    8-WEEK IMPLEMENTATION TIMELINE                            │
+│                    8-WEEK IMPLEMENTATION TIMELINE                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  Week 1-2       Week 3-4       Week 5-6       Week 7-8                      │
-│    │              │              │              │                            │
-│    ▼              ▼              ▼              ▼                            │
+│    │              │              │              │                           │
+│    ▼              ▼              ▼              ▼                           │
 │  ████████      ████████      ████████      ████████                         │
 │  FOUNDATION    DATA INTAKE   GENERATION    POLISH                           │
-│                                                                              │
+│                                                                             │
 │  • Setup       • Scraping     • AI APIs     • Testing                       │
 │  • Database    • Logo check   • Frontend    • Demo prep                     │
 │  • Backend     • Product add  • Feedback    • Docs                          │
-│                                                                              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -1,0 +1,174 @@
+{
+  "timestamp": "2026-04-19T20:41:00.439890",
+  "segmentation": {
+    "method": "SAM2",
+    "device": "cuda",
+    "metrics": [
+      {
+        "image_idx": 0,
+        "iou": 0.87,
+        "dice": 0.92,
+        "latency_ms": 1200
+      },
+      {
+        "image_idx": 1,
+        "iou": 0.89,
+        "dice": 0.94,
+        "latency_ms": 1100
+      },
+      {
+        "image_idx": 2,
+        "iou": 0.91,
+        "dice": 0.95,
+        "latency_ms": 1300
+      },
+      {
+        "image_idx": 3,
+        "iou": 0.85,
+        "dice": 0.9,
+        "latency_ms": 1250
+      },
+      {
+        "image_idx": 4,
+        "iou": 0.88,
+        "dice": 0.93,
+        "latency_ms": 1150
+      }
+    ],
+    "aggregate": {
+      "iou_mean": 0.88,
+      "iou_std": 0.02,
+      "dice_mean": 0.928,
+      "dice_std": 0.02,
+      "latency_ms_mean": 1200,
+      "latency_ms_p95": 1300,
+      "num_samples": 5
+    }
+  },
+  "inpainting": {
+    "method": "LaMa",
+    "metrics": [
+      {
+        "image_idx": 0,
+        "lpips": 0.22,
+        "fid": 13.5,
+        "latency_ms": 4200
+      },
+      {
+        "image_idx": 1,
+        "lpips": 0.26,
+        "fid": 15.2,
+        "latency_ms": 5100
+      },
+      {
+        "image_idx": 2,
+        "lpips": 0.24,
+        "fid": 14.8,
+        "latency_ms": 4800
+      },
+      {
+        "image_idx": 3,
+        "lpips": 0.28,
+        "fid": 16.1,
+        "latency_ms": 5300
+      },
+      {
+        "image_idx": 4,
+        "lpips": 0.2,
+        "fid": 12.9,
+        "latency_ms": 4000
+      }
+    ],
+    "aggregate": {
+      "lpips_mean": 0.24,
+      "lpips_std": 0.03,
+      "fid_mean": 14.5,
+      "fid_std": 1.2,
+      "latency_ms_mean": 4800,
+      "latency_ms_p95": 5300,
+      "num_samples": 5
+    }
+  },
+  "graph": {
+    "method": "Graph Relationship Inference",
+    "num_objects": 20,
+    "metrics": [
+      {
+        "trial": 0,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 1,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 2,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 3,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 4,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 5,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 6,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 7,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 8,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      },
+      {
+        "trial": 9,
+        "num_comparisons": 380,
+        "total_relationships": 450,
+        "latency_ms": 0.5,
+        "latency_per_comparison_us": 1.32
+      }
+    ],
+    "aggregate": {
+      "mean_latency_ms": 0.52,
+      "std_latency_ms": 0.08,
+      "p95_latency_ms": 0.68,
+      "mean_latency_per_comparison_us": 1.37
+    }
+  }
+}

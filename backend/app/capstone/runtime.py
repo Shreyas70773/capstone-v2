@@ -36,6 +36,8 @@ class CapstoneRuntimeSettings(BaseModel):
     lama_refiner_max_scales: int = 2
     lama_refiner_px_budget: int = 1400000
     lama_refiner_max_mask_area_fraction: float = 0.35
+    lama_allow_windows_refine: bool = False
+    lama_retry_cpu_on_cuda_failure: bool = True
     device_preference: Literal["auto", "cuda", "cpu"] = "auto"
     public_upload_subdir: str = "capstone"
     allow_mock_fallbacks: bool = False
@@ -117,6 +119,8 @@ def get_capstone_runtime_settings() -> CapstoneRuntimeSettings:
         lama_refiner_max_mask_area_fraction=float(
             os.environ.get("CAPSTONE_LAMA_REFINER_MAX_MASK_AREA_FRACTION", "0.35")
         ),
+        lama_allow_windows_refine=_env_bool("CAPSTONE_LAMA_ALLOW_WINDOWS_REFINE", False),
+        lama_retry_cpu_on_cuda_failure=_env_bool("CAPSTONE_LAMA_RETRY_CPU_ON_CUDA_FAILURE", True),
         device_preference=os.environ.get("CAPSTONE_DEVICE", "auto"),  # type: ignore[arg-type]
         public_upload_subdir=os.environ.get("CAPSTONE_UPLOAD_SUBDIR", "capstone"),
         allow_mock_fallbacks=_env_bool("CAPSTONE_ALLOW_MOCK_FALLBACKS", False),
